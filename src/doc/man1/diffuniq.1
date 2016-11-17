@@ -1,0 +1,42 @@
+.TH diffuniq "1" "9 March 2016" "User Commands"
+.SH NAME
+diffuniq \- Find unique set of differences
+.SH SYNOPSIS
+.B diffuniq
+[\fB-a\fR]
+[\fB-d\fR \fIre\fR]
+.I filename
+.RE
+.SH DESCRIPTION
+Produces a set of unique differences in the given
+.I filename
+which is a list of hunks of
+.B diff
+output on two or more files.  This is useful if many files have been compared
+and have been changed in the same way, in order to reduce the output down
+to just the common set of changes.
+
+The
+.B -a
+option requests that all filenames that introduced a change are also reported
+in the output.
+
+If
+.B -d
+.I re
+is supplied, then the given regular expression is tested against each unique
+difference.  If it matches, that particular difference is discarded.  This
+is useful for filtering out changes that you wish to ignore.  You may specify
+the
+.B -d
+option multiple times to test against multiple REs.
+.SH "SEE ALSO"
+.BR diffprof (1).
+.SH AUTHORS
+Mark R. Bannister <mark.bannister@morganstanley.com>
+.SH LICENSE
+Use of this software is subject to the Apache 2 License:
+.br
+http://www.opensource.org/licenses/apache2.0
+
+See source code for the COPYRIGHT file.

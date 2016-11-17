@@ -1,0 +1,128 @@
+2016-11-16  Mark R. Bannister
+
+	* configure: Integrate with Autoconf/Automake.
+
+2016-08-15  Mark R. Bannister
+
+	* trifle: Add trifle tool (rifle ported to C for speed).
+	* man: Add trifle to man pages.
+	* diffprof: Update to make use of trifle when it is available.
+	* tests: Update the test suite to exercise trifle.
+
+2016-08-01  Mark R. Bannister
+
+	* diffprof: Add diffprof -P option to report personalities.
+
+2016-07-04  Mark R. Bannister
+
+	* aqnet: Add aqnet tool.
+
+2016-05-24  Mark R. Bannister
+
+	* rifle prdiff diffprof: Add -I option to rifle, prdiff and diffprof.
+
+2016-03-21  Mark R. Bannister
+
+	* tests: Add tests for diffprof.  This also exercises rifle, razor
+		and git-diffuniq.
+
+	* git-diffuniq: git-diffuniq was not recording filenames correctly
+		at the end of each blob due to a mistake in the ordering
+		of instructions.
+
+2016-03-16  Mark R. Bannister
+
+	* diffprof: Improve diffprof to work in multi-process mode when
+		converting many host profiles to resource path format.  Add
+		the -a, -f, -G, -g, -i, -o, -p and -z options.
+
+	* git-diffuniq: Add the -a option to git-diffuniq to report all
+		filenames that introduced a change.
+
+	* rifle xmlnm: Rename xmlnm to rifle and add support for parsing
+		JSON files.
+
+	* razor: Add razor tool to perform 'diff -r' comparisons of large
+		directories with multiple processes and to support comparing
+		.gz files.
+
+2015-09-10  Mark R. Bannister
+
+	* aqs: Add personality stage to aqs short output.
+
+2015-03-30  Mark R. Bannister
+
+	* aqs: Add aqs -M option to display metacluster objects.
+	* man: Add man pages.
+
+2014-09-08  Mark R. Bannister
+
+	* xmlnm: list index numbers now incrementing correctly.
+	* diffuniq: diffuniq is now a symlink for git-diffuniq.
+
+2014-07-29  Mark R. Bannister
+
+	* aqs: -C option should show domain field for cluster, if present.
+
+2014-07-25  Mark R. Bannister
+
+	* aqs: Add -b, -p and -r options to add build status, hardware and
+	       location data respectively to short output.
+
+	* xmlnm: Output paths will no longer be prefixed /profile unless
+	       specifically requested on the command-line.  Unescaping with
+	       -e will be slightly more intelligent, i.e. decoding will not
+	       occur in a resource path component if the decoded character
+	       would be outside of a strict range of ASCII codes.
+
+	* diffprof: Add diffprof tool to make it easier to find common
+	       differences between sets of Quattor profiles.
+
+2014-07-16  Mark R. Bannister
+
+	* xmlnm: Fix -p option when used with filter, as the extra lines
+		 were prefixed with /profile when they shouldn't have been.
+
+2014-07-10  Mark R. Bannister
+
+	* aqs: Add -C to show cluster objects.
+	* getprof: Add -C to download cluster profiles.
+	* xmlnm: Add -G to download cluster profiles (via getprof -C).
+
+2014-07-09  Mark R. Bannister
+
+	* xmlnm: Add support for '*' wildcard in resource paths.
+
+2014-07-08  Mark R. Bannister
+
+	* aqs: Add -c and -s options to display client/server bindings.
+	* getprof: Add support for downloading profiles over HTTP with curl.
+	* xmlnm: Add -g option to download a profile with getprof.
+
+2014-01-30  Mark R. Bannister
+
+	* aqs: In short mode, also display cluster membership.
+
+2014-01-21  Mark R. Bannister
+
+	* prdiff: Allow some arguments to be omitted.
+
+2014-01-10  Mark R. Bannister
+
+	* prdiff/xmlnm: Add -k to automatically pipe to ckey.
+	* prdiff: Add -g and -c options.
+	* getprof: Prefix output with name of tool.
+	* aqs: Will now append DNS domain name automatically from resolv.conf.
+
+2014-01-09  Mark R. Bannister
+
+	* ckey: Help message had default values in wrong order.
+	* aqtools: Ensure all tools accept -h for help message.
+
+2013-12-10  Mark R. Bannister
+
+	* aqtools: Add -f and -r options to filter on package names.
+
+2013-11-29  Mark R. Bannister
+
+	* aqtools: Initial version.

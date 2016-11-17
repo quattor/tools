@@ -1,0 +1,531 @@
+#!/usr/bin/env python
+##############################################################################
+#
+# See COPYRIGHT file in source distribution for copyright holders
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+##############################################################################
+
+import os
+import sys
+import getopt
+import tempfile
+import shutil
+from multiprocessing import cpu_count, Pool, Value, Lock
+import math
+import subprocess
+import re
+from time import sleep
+from cStringIO import StringIO
+import gzip
+
+try:
+    import ms.version
+    ms.version.addpkg("tqdm", "3.8.0")
+except:
+    pass
+
+from tqdm import tqdm
+
+CALL = os.path.basename(__file__)
+CALLDIR = os.path.dirname(os.path.realpath(__file__))
+
+#
+# Correct CALLDIR if running out of common/bin, as really we want to
+# run out of bin if it exists, otherwise we won't find programs
+# built in the exec class (e.g. trifle)
+#
+if CALLDIR[-11:] == "/common/bin":
+    trydir = os.path.join(CALLDIR[:-11], "bin")
+    if os.path.exists(os.path.join(trydir, CALL)):
+        CALLDIR = trydir
+
+sys.path.append(CALLDIR)
+import rifle
+import razor
+
+RIFLE = CALLDIR + '/rifle';
+RAZOR = CALLDIR + '/razor';
+GIT_DIFFUNIQ = CALLDIR + '/git-diffuniq';
+TRIFLE = CALLDIR + '/trifle';  # faster version of rifle
+GZIP_COMPRESS_LEVEL = 1
+PERSONALITY_NAME = "/system/personality/name";
+stderr_lock = Lock()
+
+##############################################################################
+
+def syntax():
+    """ Displays command syntax. """
+
+    print """\
+Syntax: %s [-DaefGgIiPrx] [-d <re>] [-o <output>] [-p <workers>] \\
+                 [-U <lines>] [-z <compresslevel>] <dir1> <dir2>
+        %s -h\
+""" % (CALL, CALL)
+
+def usage():
+    """ Displays a usage message. """
+
+    syntax()
+    print """
+Find differences between host profiles in two distinct directories. The
+directories should each contain the same number of profiles with the same names.
+
+    -a    report all names of host profiles that introduced each difference,
+          this option is passed to git-diffuniq.
+    -D    turn on debugging.
+    -d <re>
+          discard hunks matching RE, this option is passed to git-diffuniq.
+    -e    pass -e or -ee to rifle when translating to resource paths (-x).
+    -f    force translation of resource paths to occur even if the profile
+          has not changed since the last time and intermediate files are
+          in-place (i.e. only has effect with options -i and -x as well).
+    -G    don't use a progress bar in non-debug mode.
+    -g    use a Unicode progress bar instead of the ASCII # symbol.
+    -h    displays this help message.
+    -I    pass -I to rifle when translating to resource paths (-x).
+    -i    create intermediate files in-place when translating (-x) and do
+          not delete these files.  If they exist already when this tool is used
+          and they are newer than the corresponding profile they will
+          not be re-generated unless the -f option has been used as well.
+    -o <output>
+          send output to given file, instead of to stdout.
+    -P    list personalities changed (only works with -a output).
+    -p <workers>
+          maximum number of worker processes to use when translating (-x),
+          default is the number of CPU cores.
+    -r
+          always use rifle (Python) even if tiny rifle (C) is available
+    -U <lines>
+          number of lines of context to produce in unified diff output.
+    -x    translate to resource paths first using rifle -p.
+    -z <compresslevel>
+          level of compression to use when writing gzip files via the -x
+          option, where 1 is fastest with least compression, 9 is slowest
+          with best compression and 0 is no compression.  Default is %d.
+""" % GZIP_COMPRESS_LEVEL
+
+##############################################################################
+
+def chunks(l, n):
+    """ Yield successive n-sized chunks from l. """
+    for i in xrange(0, len(l), n):
+        yield l[i:i+n]
+
+def rifle_worker(filelist):
+    """ Worker responsible for calling rifle to translate a given
+        set of profiles to /path/key = value format. """
+    pid = os.getpid()
+
+    if debug:
+        with stderr_lock:
+            sys.stderr.write(("%s: DEBUG: pid %d: worker thread started with "
+                              "%d file(s) to translate\n") %
+                                (CALL, pid, len(filelist)))
+
+    for f in filelist:
+        (infile, outfile) = f
+
+        if transcmd[0] == TRIFLE and \
+                (infile[-5:] == ".json" or infile[-8:] == ".json.gz"):
+            #
+            # Using trifle for speed
+            #
+            cmd = transcmd + transopt + trifleopt + \
+                        ["-d", os.path.dirname(outfile), infile]
+
+            if debug:
+                with stderr_lock:
+                    sys.stderr.write("%s: DEBUG: pid %d: executing: %s\n" %
+                                            (CALL, pid, " ".join(cmd)))
+            try:
+                output = subprocess.check_output(cmd, stderr=subprocess.STDOUT)
+            except KeyboardInterrupt:
+                if debug:
+                    with stderr_lock:
+                        sys.stderr.write("%s: DEBUG: pid %d: "
+                                         "interrupted by Ctrl+C\n"
+                                         % (CALL, pid))
+                return 1
+            except subprocess.CalledProcessError as e:
+                with stderr_lock:
+                    sys.stderr.write("%s: pid %d: command failed, "
+                                     "return code %d: %s: %s\n" %
+                                     (CALL, pid, e.returncode, " ".join(cmd),
+                                      e.output.strip()))
+                return 1
+        else:
+            #
+            # Call rifle as a module within the context of this
+            # program (but we are in child process already so that it
+            # has its own GIL)
+            #
+            if transcmd[0] == TRIFLE: cmd = [RIFLE]
+            else: cmd = transcmd
+
+            cmd += transopt + [infile]
+
+            if debug:
+                with stderr_lock:
+                    sys.stderr.write("%s: DEBUG: pid %d: executing: %s\n" %
+                                            (CALL, pid, " ".join(cmd)))
+
+            if get_persona:
+                xdup = [PERSONALITY_NAME]
+                xoutf = outfile
+                if xoutf[-3:] == ".gz":
+                    xoutf = xoutf[:-3]
+                xoutf += ".slice"
+            else:
+                xdup = xout = None
+
+            with gzip.open(outfile, "w", compresslevel) as outfile:
+                try:
+                    if get_persona:
+                        xout = open(xoutf, "w")
+                    try:
+                        rifle.main(cmd, outfile=outfile, xdup=xdup, xout=xout)
+                    except KeyboardInterrupt:
+                        if debug:
+                            with stderr_lock:
+                                sys.stderr.write("%s: DEBUG: pid %d: "
+                                                 "interrupted by Ctrl+C\n"
+                                                 % (CALL, pid))
+                        return 1
+                finally:
+                    if xout is not None:
+                        xout.close()
+
+        with counter.get_lock():
+            counter.value += 1
+
+    return 0
+
+def do_translations(numworkers, dir1, dir2):
+    """ Translate profiles with rifle in the two given directories. """
+    global counter
+
+    if trans_inplace:
+        transdir1 = dir1
+        transdir2 = dir2
+    else:
+        transdir1 = tmpdir + "/1"
+        transdir2 = tmpdir + "/2"
+        os.mkdir(transdir1, 0700)
+        os.mkdir(transdir2, 0700)
+
+    #
+    # Get list of files to translate
+    #
+    sys.stderr.write("%s: finding files to convert to resource "
+                     "path format\n" % CALL)
+    filelist = []
+    for thisdir in (dir1, dir2):
+        for dirpath, dirs, files in os.walk(thisdir):
+            for f in files:
+                if f[-4:] != ".xml" and f[-7:] != ".xml.gz" and \
+                   f[-5:] != ".json" and f[-8:] != ".json.gz": continue
+
+                f = os.path.join(dirpath, f)
+
+                if thisdir == dir1:
+                    outdir = transdir1
+                else:
+                    outdir = transdir2
+
+                subdir = os.path.dirname(f[len(thisdir)+1:])
+                if subdir != "": outdir += "/" + subdir
+                outfile = outdir + "/" + os.path.basename(f)
+                if outfile[-4:] == ".xml": outfile = outfile[:-4]
+                if outfile[-7:] == ".xml.gz": outfile = outfile[:-7]
+                if outfile[-5:] == ".json": outfile = outfile[:-5]
+                if outfile[-8:] == ".json.gz": outfile = outfile[:-8]
+                outfile += ".txt.gz"
+
+                #
+                # When using -i, only run rifle if it wasn't run before on
+                # this profile or if the profile is newer or if the
+                # force option (-f) was used
+                #
+                if not trans_inplace or force or not os.path.exists(outfile) \
+                        or os.path.getmtime(f) > os.path.getmtime(outfile):
+                    filelist += [(f, outfile)]
+
+    fc = len(filelist)
+    if fc == 0: return transdir1, transdir2
+    if numworkers > fc: numworkers = fc
+
+    #
+    # Start worker processes
+    #
+    sys.stderr.write("%s: converting %d file(s) to resource path format\n" %
+                                                                    (CALL, fc))
+    counter = Value('i', 0)     # global counter for progress bar
+    last_count = 0
+    if debug and numworkers == 1:
+        #
+        # Special case - do not launch a new process if 1 worker process
+        # has been requested in debug mode, which is useful for debugging
+        # the rifle_worker() function
+        #
+        if rifle_worker(filelist) > 0:
+            raise RuntimeError("Some files failed to be processed by %s" %
+                                                                    transcmd[0])
+    else:
+        if debug:
+            sys.stderr.write("%s: DEBUG: starting %d worker processes "
+                             "to convert %d file(s)\n" % (CALL, numworkers, fc))
+
+        pool = Pool(numworkers)
+        async = pool.map_async(rifle_worker, chunks(filelist,
+                                    int(math.ceil((fc + 0.0) / numworkers))))
+
+        #
+        # Watch counter progress and use progress bar
+        #
+        try:
+            with tqdm(total=len(filelist), ascii=not progress_unicode,
+                      unit="files", disable=not progress_bar) as pbar:
+                while not async.ready():
+                    sleep(0.1)
+
+                    with counter.get_lock():
+                        new_count = counter.value
+
+                    if new_count > last_count:
+                        pbar.update(new_count - last_count)
+                        last_count = new_count
+        except KeyboardInterrupt:
+            sys.stderr.write("%s: interrupted by Ctrl+C\n" % CALL)
+            exit(2)
+
+        pool.close()
+
+        if not async.successful():
+            raise RuntimeError("Some files failed to be processed by %s" %
+                                                                    transcmd[0])
+
+    return transdir1, transdir2
+
+def run_diff(numworkers, outfile, dir1, dir2):
+    """ Find differences in the two given directories. """
+    #
+    # Put together the options for the razor tool
+    #
+    rzopt = ["-dp%d" % numworkers]
+    if debug: rzopt.append("-D")
+    elif not progress_bar: rzopt.append("-G")
+    elif progress_unicode: rzopt.append("-g")
+
+    #
+    # Exclude profiles if we have in-place translations
+    #
+    if len(transcmd) > 0 and trans_inplace:
+        rzopt += ["-x", "\.xml$",
+                  "-x", "\.xml.gz$",
+                  "-x", "\.json$",
+                  "-x", "\.json.gz$",
+                  "-x", "\.slice$",
+                  "-x", "\.dep$"]
+
+    sys.stderr.write("%s: finding differences\n" % CALL)
+
+    #
+    # Write output from razor (diff -r) to a temporary file
+    # and then pass that file by name to diffuniq
+    #
+    personalities = set()
+    profiles = set()
+    with tempfile.NamedTemporaryFile(prefix="tmp.%s." % CALL) as outfp:
+        cmd = [RAZOR] + rzopt + ["--"] + diffopt + [dir1, dir2]
+        if debug:
+            sys.stderr.write("%s: DEBUG: executing: %s\n" %
+                                                    (CALL, " ".join(cmd)))
+
+        output = StringIO()
+        retval = razor.main(cmd, outfile=output)
+        if retval > 1:
+            sys.stderr.write("%s: %s failed with return code %d\n" %
+                                            (CALL, " ".join(cmd), retval))
+            return retval
+
+        for line in output.getvalue().splitlines():
+            if line[0:7] == "Only in":
+                print line
+            else:
+                outfp.write(line + "\n")
+
+        outfp.flush()
+        cmd = [GIT_DIFFUNIQ] + uniqopt + [outfp.name]
+        if debug:
+            sys.stderr.write("%s: DEBUG: executing: %s\n" %
+                                                (CALL, " ".join(cmd)))
+        output = subprocess.check_output(cmd, stderr=subprocess.STDOUT)
+        for line in output.splitlines():
+            if line[0:15] == "@@ Modified in:":
+                #
+                # Collate personality data
+                #
+                pfile = os.path.basename(line)
+                if pfile[-3:] == ".gz":
+                    pfile = pfile[:-3]
+
+                profiles.add(pfile)
+                pfile += ".slice"
+                for d in (dir1, dir2):
+                    sfile = os.path.join(d, pfile)
+                    if os.path.exists(sfile):
+                        with open(sfile, "r") as slicef:
+                            pname = slicef.readline().rstrip()
+                            if " = " in pname:
+                                pname = pname.split(" = ", 1)[1]
+                                pname = re.sub("\"", "", pname)
+                                personalities.add(pname)
+
+            outfile.write(line + "\n")
+
+    if len(profiles) > 0:
+        outfile.write("@@ %d profile%s changed\n" %
+                      (len(profiles), "" if len(profiles) == 1 else "s"))
+    if len(personalities) > 0:
+        outfile.write("@@ %d personalit%s changed" %
+                      (len(personalities),
+                       "y" if len(personalities) == 1 else "ies"))
+        if list_persona:
+            outfile.write(": %s" % ",".join(sorted(personalities)))
+
+        outfile.write("\n")
+
+    return 0
+
+##############################################################################
+
+def main():
+    global debug, tmpdir, transcmd, transopt, trifleopt, trans_inplace, force
+    global get_persona, list_persona
+    global progress_bar, progress_unicode, diffopt, uniqopt, compresslevel
+
+    if len(sys.argv) < 2:
+        syntax()
+        return 1
+
+    #
+    # Parse command-line arguments
+    #
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "aDd:efGghIio:Pp:rU:xz:")
+    except getopt.GetoptError as err:
+        print "%s: %s" % (CALL, str(err))
+        return 1
+
+    debug = False
+    diffopt = []
+    transcmd = []
+    transopt = []
+    trifleopt = []
+    trans_inplace = False
+    force = False
+    get_persona = True  # always fetch this data
+    list_persona = False
+    progress_bar = True
+    progress_unicode = False
+    uniqopt = []
+    numworkers = cpu_count()
+    outfile = sys.stdout
+    tmpdir = None
+    compresslevel = GZIP_COMPRESS_LEVEL
+    use_rifle = False
+
+    for o, a in opts:
+        if o == "-a": uniqopt.append(o)
+        elif o == "-D": debug = True
+        elif o == "-d":
+            uniqopt.append(o)
+            uniqopt.append(a)
+        elif o == "-e": transopt.append(o)
+        elif o == "-f": force = True
+        elif o == "-G": progress_bar = False
+        elif o == "-g": progress_unicode = True
+        elif o == "-h":
+            usage()
+            return 1
+        elif o == "-I": transopt.append(o)
+        elif o == "-i": trans_inplace = True
+        elif o == "-o": outfile = open(a, "w")
+        elif o == "-P": list_persona = True
+        elif o == "-p": numworkers = int(a)
+        elif o == "-r": use_rifle = True
+        elif o == "-U":
+            diffopt.append(o)
+            diffopt.append(a)
+        elif o == "-x":
+            if os.path.exists(TRIFLE):
+                transcmd.append(TRIFLE)
+            else:
+                transcmd.append(RIFLE)
+
+            transcmd.append("-p")
+        elif o == "-z":
+            compresslevel = int(a)
+
+    if len(args) != 2 or compresslevel < 0 or compresslevel > 9:
+        syntax()
+        return 1
+
+    if debug: progress_bar = False
+
+    if len(diffopt) == 0:
+        if len(transcmd) == 0:
+            diffopt.append("-u")
+        else:
+            #
+            # Default to zero lines of context if using rifle
+            #
+            diffopt.append("-U0")
+
+    if len(transcmd) > 0 and transcmd[0] == TRIFLE:
+        if use_rifle:
+            transcmd[0] = RIFLE
+        else:
+            trifleopt.append("-n")
+            if compresslevel > 0: trifleopt.append("-C%d" % compresslevel)
+            if get_persona: trifleopt += ["-s", PERSONALITY_NAME]
+
+    dir1 = args[0]
+    dir2 = args[1]
+    for thisdir in (dir1, dir2):
+        if not os.path.isdir(thisdir):
+            sys.stderr.write("%s: directory not found: %s\n" % (CALL, thisdir))
+            return 1
+        if not os.access(thisdir, os.R_OK) or not os.access(thisdir, os.X_OK):
+            sys.stderr.write("%s: no permission to access directory: %s\n" %
+                                                            (CALL, thisdir))
+            return 1
+
+    tmpdir = tempfile.mkdtemp(prefix="tmp.%s." % CALL)
+    try:
+        if len(transcmd) > 0:
+            (dir1, dir2) = do_translations(numworkers, dir1, dir2)
+
+        return run_diff(numworkers, outfile, dir1, dir2)
+
+    finally:
+        if tmpdir is not None:
+            shutil.rmtree(tmpdir)
+
+        if outfile != sys.stdout: outfile.close()
+
+if __name__ == "__main__":
+    retval = main()
+    exit(retval)

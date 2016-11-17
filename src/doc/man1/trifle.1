@@ -1,0 +1,166 @@
+.TH trifle "1" "15 August 2016" "User Commands"
+.SH NAME
+trifle \- Convert Quattor JSON to resource path format
+.SH SYNOPSIS
+.B trifle
+[\fB-19CDeFfhInpt\fR] [\fB-d\fR \fIoutdir\fR] [\fB-O\fR \fIsuffix\fR] \\
+.RS 10
+[\fB-R\fR \fIsuffix\fR] [\fB-S\fR \fIsuffix\fR] [\fB-s\fR \fIslice\fR]
+\fIfile\fR [\fIfile\fR ...]
+.RE
+.SH DESCRIPTION
+"Tiny rifle" is a faster version of
+.BR rifle (1)
+written in C instead of Python, with much of the same functionality, although
+provides better support for processing a large number of files.
+It converts Quattor JSON profile data to paths and values in the format:
+
+    \fB/path/key\fR = \fBvalue\fR
+
+Each
+.I file
+provided is a JSON profile, optionally compressed with
+.BR gzip (1),
+or if the
+.B -f
+option was given, each
+.I file
+contains a list of filenames to process, one per line.
+
+The output of the conversion is normally written to a file in the same
+directory with the
+.B .json
+suffix replaced by
+.BR .txt ,
+or alternatively in the directory specified by the
+.B -d
+argument.  The output file will be compressed if requested by
+.BR -C .
+If the output file already exists, is non-zero bytes in length and has
+a modification timer newer than that of the input file, no new output
+file is created.  If the
+.B -t
+option is specified, and only one filename was provided, the output
+will be sent instead to
+.BR stdout .
+
+If a single dash "-" is provided instead of a
+.I file
+on the command-line, and no slices are being requested (\fB-s\fR),
+.B trifle
+will read from
+.B stdin
+and write to
+.BR stdout .
+.SH OPTIONS
+The following options are supported:
+.RS 4
+.TP 4
+\fB-1\fR to \fB-9\fR
+Gzip compression level to use if compressing output (\fB-C\fR).  See
+.BR gzip (1).
+.TP
+.B -C
+Compress output files using Gzip format.
+.TP
+.B -D
+Increase debug level.
+.B -D
+is usually sufficient.
+.B -DD
+is very verbose.
+.TP
+.BI -d " outdir"
+Write output files in the named directory rather than in the same
+place as the input files.
+.TP
+.B -e
+Remove Quattor-style escaping from output resource paths.  WARNING: use this
+option with care, this tool cannot know which path components were escaped and
+which ones were not.
+.TP
+.B -F
+Forcibly create output files even if they are newer than the input files.
+Default behaviour is not to convert a file if the output file already exists
+and is newer.
+.TP
+.B -f
+Each
+.I file
+provided as a command-line argument contains a list of filenames to process,
+each path separated by a newline.
+.TP
+.B -h
+Hide structural entries that do not have values.
+.TP
+.B -I
+Do not generate index numbers for each element of a list, using a hash #
+character instead.  This makes it easier to compare profiles with
+.BR diffprof .
+.TP
+.B -n
+Split multi-line values onto multiple lines.  By default, multi-line values
+are displayed on a single line separated by a newline escape sequence '\\n'.
+.TP
+.BI -O " suffix"
+Suffix to append to output filenames.  Default is
+.BR .txt .
+.TP
+.B -p
+Prefix all lines in a multi-line value with the resource path, rather than
+just the first line.  Requires
+.BR -n .
+.TP
+.BI -R " suffix"
+Suffix to remove from output filenames.  Default is
+.BR .json .
+.TP
+.BI -S " suffix"
+Suffix to append to slice files (\fB-s\fR).  Default is
+.BR .slice .
+.TP
+.BI -s " slice"
+Saves a given resource path identified by
+.I slice
+and its associated value to a slice file.  One slice file per input file will
+be generated if any slices have been requested.  Multiple
+.B -s
+arguments may be provided for multiple slices, which will be written to the
+same slice file.
+.TP
+.B -t
+Send output to
+.BR stdout .
+This option only takes effect if a single input file was provided and
+if no slices (\fB-s\fR) are requested.
+.RE
+.SH NOTES
+The
+.B rifle
+tool was ported to C to improve performance primarily when it is used by
+.BR diffprof (1)
+on many thousands of profiles.  On an 8-core machine, for example, while
+it would take
+.B diffprof
+6 minutes to convert approx. 5,400 JSON profiles using
+.B rifle
+at a rate of 15 files per second, it takes approx. 15 seconds at a rate of
+over 300 files per second when using
+.BR trifle .
+
+The
+.B trifle
+tool only processes JSON profiles.  For XML profiles, you will need to use
+.BR rifle .
+.SH "SEE ALSO"
+.BR rifle (1),
+.BR diffprof (1),
+.BR gzip (1).
+.SH AUTHORS
+Mark R. Bannister <mark.bannister@morganstanley.com>
+.SH LICENSE
+Use of this software is subject to the Apache 2 License:
+.br
+http://www.opensource.org/licenses/apache2.0
+
+See source code for the COPYRIGHT file.

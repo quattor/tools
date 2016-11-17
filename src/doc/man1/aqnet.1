@@ -1,0 +1,38 @@
+.TH aqnet "1" "4 July 2016" "User Commands"
+.SH NAME
+aqnet \- Display an Aquilon network device in tabular form
+.SH SYNOPSIS
+.B aqnet
+[\fB-Dl\fR] \fInetwork_device\fR
+.SH DESCRIPTION
+Displays colourised information about Aquilon network devices in tabular or
+long format.  Shortcut for
+.BR "aq show network device" .
+.SH OPTIONS
+The following options are supported:
+.RS 4
+.TP 4
+.B -D
+Enables debug output.
+.TP
+.B -l
+Displays long output instead of tabular output.
+.RE
+.SH "ENVIRONMENT VARIABLES"
+The colour of the table and fields may be varied with the
+.B AQNET_COL1
+and
+.B AQNET_COL2
+environment variables, which may be set to an ANSI colour
+code between 0 (black) and 7 (white).
+.SH "SEE ALSO"
+.BR aqs (1),
+.BR ckey (1).
+.SH AUTHORS
+Mark R. Bannister <mark.bannister@morganstanley.com>
+.SH LICENSE
+Use of this software is subject to the Apache 2 License:
+.br
+http://www.opensource.org/licenses/apache2.0
+
+See source code for the COPYRIGHT file.

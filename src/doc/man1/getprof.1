@@ -1,0 +1,54 @@
+.TH getprof "1" "12 March 2016" "User Commands"
+.SH NAME
+getprof \- Download host or cluster profile
+.SH SYNOPSIS
+.B getprof
+[\fB-Ds\fR] {\fIhost\fR|\fIalias\fR}
+.br
+.B getprof
+[\fB-Ds\fR]
+.B -C
+.I cluster
+.br
+.B getprof
+.B -h
+.RE
+.SH DESCRIPTION
+Download host or cluster profile from Aquilon broker and send to stdout.
+
+By default, one profile is downloaded over HTTP, after alias expansion
+from
+.BR ~/etc/aqs.tab .
+The DNS domain name may be omitted, in which case it will be added from
+.BR /etc/resolv.conf .
+.SH OPTIONS
+The following options are supported:
+.RS 4
+.TP 4
+.B -C
+Download cluster profile instead of host profile.
+.TP
+.B -D
+Enables debug output.
+.TP
+.B -h
+Displays a help message.
+.TP
+.B -s
+Use SSH instead of HTTP to download one or more matching profiles.  If more
+than one profile is matched, then all matching profiles will be sent
+in succession to stdout.  The number of matching profiles will be reported
+to stderr.
+.RE
+.SH "SEE ALSO"
+.BR aqs (1),
+.BR rifle (1),
+.BR aqs.tab (5).
+.SH AUTHORS
+Mark R. Bannister <mark.bannister@morganstanley.com>
+.SH LICENSE
+Use of this software is subject to the Apache 2 License:
+.br
+http://www.opensource.org/licenses/apache2.0
+
+See source code for the COPYRIGHT file.

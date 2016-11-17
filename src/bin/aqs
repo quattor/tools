@@ -1,0 +1,325 @@
+#!/bin/ksh
+##############################################################################
+#
+# See COPYRIGHT file in source distribution for copyright holders
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+##############################################################################
+
+CALL=$(basename $0)
+CALLDIR=$(dirname $0)
+TMPFILE=/tmp/tmp.$CALL.$$
+AWK=/bin/nawk
+[ -x /bin/gawk ] && AWK=/bin/gawk
+AQ=aq
+DEBUG=0
+
+trap 'rm -f $TMPFILE' INT HUP TERM EXIT
+
+##############################################################################
+#
+# syntax()
+#
+# Display command syntax
+#
+##############################################################################
+function syntax
+{
+    cat << EOF >&2
+
+Syntax: $CALL [-Dd] [-bcprs] {<host>|<alias>}
+        $CALL [-Dd] -l {<host>|<alias>}
+        $CALL [-l] -C <cluster>
+        $CALL [-l] -M <metacluster>
+        $CALL -h
+EOF
+}
+
+##############################################################################
+#
+# usage()
+#
+# Display help message
+#
+##############################################################################
+function usage
+{
+    syntax
+    cat << EOF >&2
+
+Shortcut for 'aq show host', 'aq show cluster' and 'aq show metacluster',
+where:
+    -C    shows a cluster object instead of a host object.
+    -D    turn on debugging.
+    -d    uses aqdw instead of aq (not for clusters).
+    -h    displays this help message.
+    -l    displays long output instead of short output.
+    -M    shows a metacluster object instead of a host object.
+
+Short output may be augmented for hosts with additional information:
+    -b    includes build status.
+    -c    includes client bindings.
+    -p    includes physical properties/hardware data.
+    -r    includes regional properties/location data.
+    -s    includes server bindings.
+
+The hostname may be set-up as an alias in ~/etc/aqs.tab where the first
+column is the alias and the second column is the fully-qualified hostname
+to match.
+
+EOF
+}
+
+##############################################################################
+#
+# get_domains()
+#
+# Get space-separated list of DNS domains from /etc/resolv.conf
+#
+##############################################################################
+function get_domains
+{
+    typeset domains=
+
+    [ -r /etc/resolv.conf ] &&
+        domains=$($AWK '/^domain/ || /^search/ {$1=""; print}' /etc/resolv.conf)
+
+    if [ -z "$domains" ]; then
+        echo -
+    else
+        echo $domains
+    fi
+}
+
+##############################################################################
+#
+# show_host()
+#
+# Attempt to run 'aq show host' for the given hostname, may have to attempt to
+# suffix multiple DNS domain names from /etc/resolv.conf
+#
+##############################################################################
+function show_host
+{
+    typeset host=$1
+
+    for domain in $(get_domains); do
+        if [ "x$domain" = x- ]; then
+            domain=
+        else
+            domain=".$domain"
+            [ "${host%$domain}" != "$host" ] && domain=
+        fi
+
+        [ $DEBUG -eq 1 ] && echo $CALL: trying $host$domain ... >&2
+        $AQ show host --hostn $host$domain 2> $TMPFILE && return
+    done
+
+    if [ -s $TMPFILE ]; then
+        cat $TMPFILE >&2
+    else
+        echo $CALL: $AQ show host did not return a result >&2
+    fi
+}
+
+##############################################################################
+# START HERE
+##############################################################################
+
+#
+# Parse command-line arguments
+#
+help=0
+long=0
+clientbind=0
+servbind=0
+cluster=0
+metacluster=0
+build=0
+hardware=0
+location=0
+
+while getopts bCcDdhlMprs opt
+do
+    case $opt in
+        b)    build=1;;
+        C)    cluster=1;;
+        c)    clientbind=1;;
+        D)    DEBUG=1;;
+        d)    AQ=aqdw;;
+        h)    help=2;;
+        l)    long=1;;
+        M)    metacluster=1;;
+        p)    hardware=1;;
+        r)    location=1;;
+        s)    servbind=1;;
+        ?)    help=1;;
+    esac
+done
+shift $((OPTIND - 1))
+
+[ $help -eq 0 -a $# -ne 1 ] && help=1
+[ \( $cluster -eq 1 -o $metacluster -eq 1 \) -a $AQ = aqdw ] && help=1
+
+if [ $help -eq 1 ]; then
+    syntax
+    exit 2
+elif [ $help -eq 2 ]; then
+    usage
+    exit 2
+fi
+
+if [ $cluster -eq 0 -a $metacluster -eq 0 ]; then
+    #
+    # Display host object
+    #
+    # Lookup alias expansion iN ~/etc/aqs.tab
+    # or etc/aqs.tab relative to the location of this script
+    #
+    host=$1
+    if [ -f ~/etc/aqs.tab ]; then
+        s=$($AWK -v host=$host '$1 == host { print $2; exit }' ~/etc/aqs.tab $CALLDIR/../etc/aqs.tab)
+        if [ -n "$s" ]; then
+            [ $DEBUG -eq 1 ] && echo $CALL: expanded by aqs.tab: $s >&2
+            host="$s"
+        fi
+    fi
+
+    #
+    # Call aq show host
+    #
+    if [ $long -eq 0 ]; then
+        show_host $host | $AWK -v build=$build -v clientbind=$clientbind \
+                               -v servbind=$servbind \
+                               -v location=$location -v hardware=$hardware '
+            /Primary Name:/ || /Host Personality:/ || /Operating System:/ ||
+            /Version:/ || /  Domain:/ || /Sandbox:/ || /Cluster:/ {
+                out[++idx] = $0; next
+            }
+            /Stage:/ { stage = $2; next }
+
+            clientbind && /Uses Service:/ { bindc[++bci] = $3 "/" $5; next }
+            clientbind && $1 == "Service:" && NF==2 { thisc = $2; next }
+            clientbind && $1 == "Instance:" && NF==2 && thisc {
+                bindc[++bci] = thisc "/" $2; next }
+            servbind && /Provides Service:/ { binds[++bsi] = $3 "/" $5; next }
+
+            build && /Build Status:/ { buildstat = $3; next }
+
+            location && ($1 == "Building:" || $1 == "Bunker:" ||
+                         $1 == "Campus:" || $1 == "City:" ||
+                         $1 == "Continent:" || $1 == "Country:" ||
+                         $1 == "Hub:" || $1 == "Rack:" || $1 == "Room:" ||
+                         $1 == "Row:" || $1 == "Column:") {
+                loc[tokey($1)] = $2; got_loc = 1; next
+            }
+
+            hardware && /^  Vendor:/ {
+                hw[tokey($1)] = $2; hw[tokey($3)] = $4; got_hw = 1; next
+            }
+            hardware && /Model Type:/ {
+                hw["type"] = $3; got_hw = 1; next
+            }
+            hardware && ($1 == "Serial:" || $1 == "Chassis:" ||
+                         $1 == "Slot:" || $1 == "Cpu:") {
+                hw[tokey($1)] = $2; got_hw = 1; next
+            }
+
+            END {
+                for (i=1; i<=idx; i++)
+                {
+                    if (stage && out[i] ~ /Host Personality:/)
+                        sub(" Archetype:", "/" stage "&", out[i])
+
+                    print out[i]
+                }
+
+                nl="\n"
+                if (buildstat) {
+                    printf(nl "  Build Status: %s\n", buildstat)
+                    nl = ""
+                }
+                if (got_loc) {
+                    printf(nl "  Continent: %s Country: %s Hub: %s " \
+                           "City: %s Campus: %s Building: %s\n  Room: %s " \
+                           "Bunker: %s Rack: %s Row: %s Column: %s\n",
+                                gloc("continent"), gloc("country"), gloc("hub"),
+                                gloc("city"), gloc("campus"), gloc("building"),
+                                gloc("room"), gloc("bunker"), gloc("rack"),
+                                gloc("row"), gloc("column"))
+                    nl = ""
+                }
+                if (got_hw) {
+                    printf(nl "  Vendor: %s Model: %s Type: %s Serial: %s\n",
+                                           ghw("vendor"), ghw("model"),
+                                           ghw("type"), ghw("serial"))
+                    if (hw["chassis"] != "")
+                        printf("  Chassis: %s Slot: %s\n",
+                                           ghw("chassis"), ghw("slot"))
+                    nl = ""
+                }
+                if (bci) {
+                    printf(nl "  Uses:")
+                    for (i=1; i<=bci; i++) printf(" %s", bindc[i])
+                    print ""
+                    nl = ""
+                }
+                if (bsi) {
+                    printf(nl "  Provides:")
+                    for (i=1; i<=bsi; i++) printf(" %s", binds[i])
+                    print ""
+                }
+            }
+
+            function tokey(_tk_s) {
+                sub(":", "", _tk_s)
+                return tolower(_tk_s)
+            }
+
+            function gloc(_gl_s) {
+                if (loc[_gl_s] != "") return loc[_gl_s]
+                return "none"
+            }
+
+            function ghw(_gh_s) {
+                if (hw[_gh_s] != "") return hw[_gh_s]
+                return "none"
+            }
+            ' | ckey
+    else
+        show_host $host | ckey
+    fi
+elif [ $cluster -eq 1 ]; then
+    #
+    # Display cluster object
+    #
+    cluster=$1
+    if [ $long -eq 0 ]; then
+        $AQ show cluster --cluster $cluster |\
+            egrep 'Cluster:|Metacluster:|Cluster Personality:|  Domain:|Sandbox:|  Member:'| ckey
+    else
+        $AQ show cluster --cluster $cluster | ckey
+    fi
+else
+    #
+    # Display metacluster object
+    #
+    metacluster=$1
+    if [ $long -eq 0 ]; then
+        $AQ show metacluster --metacluster $metacluster |\
+            egrep 'Cluster:|Cluster Personality:|  Domain:|Sandbox:|  Member:'| ckey
+    else
+        $AQ show metacluster --metacluster $metacluster | ckey
+    fi
+fi

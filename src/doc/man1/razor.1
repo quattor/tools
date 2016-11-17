@@ -1,0 +1,85 @@
+.TH razor "1" "16 March 2016" "User Commands"
+.SH NAME
+razor \- multi-process recursive diff tool
+.SH SYNOPSIS
+.B razor
+[\fB-DdGg\fR]
+[\fB-i\fR \fIinclude\fR]
+[\fB-o\fR \fIoutput\fR] \\
+[\fB-p\fR \fIworkers\fR]
+.br
+.RS 14
+[\fB-x\fR \fIexclude\fR]
+[\fB--\fR \fIdiff-options\fR]
+\fIdir1\fR \fIdir2\fR
+.RE
+.br
+.B "razor -h"
+.RE
+.SH DESCRIPTION
+Runs a recursive
+.B diff
+on two given directories in multiple processes, and supports decompression.
+The output will be identical to
+.B "diff -r"
+except that it performs faster for a large number of files.
+
+Any
+.I diff-options
+provided will be passed directly to each
+.B diff
+invocation.
+
+Note that I/O may become a bottleneck if each file is small.
+.SH OPTIONS
+The following options are supported:
+.RS 4
+.TP 4
+.BI -D
+Enables debug output.
+.TP
+.B -d
+Files with a
+.B .gz
+suffix will be decompressed in a pipeline prior to the
+.BR diff .
+.TP
+.B -G
+Don't use a progress bar in non-debug mode.
+.TP
+.B -g
+Use a Unicode progress bar instead of the ASCII # symbol.
+.TP
+.B -h
+Displays a help message.
+.TP
+.BI -i " include"
+Regular expression to match filenames to include.  Multiple
+.B -i
+options are allowed.
+.TP
+.BI -o " output"
+Send output to given file, instead of to stdout.
+.TP
+.BI -p " workers"
+Maximum number of worker processes to use.  May use less workers than this
+if there are not enough files to process.  The default is the number of
+available CPU cores.
+.TP
+.BI -x " exclude"
+Regular expression to match filenames to exclude.  Multiple
+.B -x
+options are allowed.  In the case of a clash, these take precedence
+over the REs specified by the
+.B -i
+option.
+.SH "SEE ALSO"
+.BR diff (1).
+.SH AUTHORS
+Mark R. Bannister <mark.bannister@morganstanley.com>
+.SH LICENSE
+Use of this software is subject to the Apache 2 License:
+.br
+http://www.opensource.org/licenses/apache2.0
+
+See source code for the COPYRIGHT file.

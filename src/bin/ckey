@@ -1,0 +1,206 @@
+#!/usr/bin/env python
+##############################################################################
+#
+# See COPYRIGHT file in source distribution for copyright holders
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+##############################################################################
+
+import os
+import sys
+import re
+import getopt
+
+try:
+    import ms.version
+    ms.version.addpkg('termcolor', '0.1.2')
+except:
+    pass
+
+from termcolor import colored
+
+CALL = os.path.basename(__file__)
+default_delim = "[:=]"
+default_col = ["green", "cyan", "yellow:reverse"]
+last_col = default_col
+
+def usage():
+    """ Displays a usage message. """
+
+    print """
+Syntax: %s [-h] [-d <delimit>] [-k <colcode>] \\
+                [-r <re>] [-v <colcode>] [-x <colcode>]
+
+Adds colour to key/value pairs on stdin.
+
+Options:
+    -h            to display this help message.
+    -d <delim>    changes RE used for identifying key/value delimiter.
+                  Default is '%s'.
+    -k <colcode>  changes colour for keys.  Default is '%s'.
+    -r <re>       highlight wherever regex matches.
+    -v <colcode>  changes colour for values.  Default is '%s'.
+    -x <colcode>  changes colour for regex.  Default is '%s'.
+
+<colcode> can describe text colours, highlights and attributes.
+The format is: [<colour>][:<attribute>[,<attribute> ...]] where
+    <colour>     can be: grey, red, green, yellow, blue, magenta, cyan, white
+                 or it can be omitted to use the current colour.
+    <attribute>  can be: on_grey, on_red, on_green, on_yellow,
+                         on_blue, on_magenta, on_cyan, on_white,
+                         bold, dark, underline, blink, reverse, concealed.
+
+For example, -k red:bold,on_white -v :bold will make keys appear in bold
+red text on a white background, and values will be made to be bold but will
+otherwise use their default colour.
+
+The colours may also be changed using the environment variables
+CKEY_COL1 for keys, CKEY_COL2 for values, CKEY_COL3 for regex e.g.
+    $ export CKEY_COL1=blue CKEY_COL2=white CKEY_COL3=red:underline
+""" % (CALL, default_delim, default_col[0], default_col[1], default_col[2])
+
+def add_colour(text, colcode, coltype):
+    """ Splits colcode into colour, highlights and attributes before
+        passing through to termcolor.colored().  The colour code
+        is colon-separated, the first field is the colour, the
+        second field is a comma-separated list of text highlights
+        and attributes, e.g. green:on_red,bold
+        
+        coltype is 0 for keys, 1 for values and 2 for regexes. """
+    global last_col
+
+    highlight = attrs = None
+
+    lst = colcode.split(":", 2)
+    if len(lst) > 1:
+        colcode = lst[0]
+        lst2 = lst[1].split(",")
+        for s in lst2:
+            if s.find("on_") == 0:
+                highlight = s
+            elif attrs == None:
+                attrs = [s]
+            else:
+                attrs.append(s)
+
+    if colcode == "": colcode = last_col[coltype]
+    else: last_col[coltype] = colcode
+
+    return colored(text, colcode, highlight, attrs=attrs)
+
+def main():
+    """ Main function. """
+    global default_delim, default_col
+
+    delim = default_delim
+    regex_hi = None
+
+    if "CKEY_COL1" in os.environ: keycol = os.environ["CKEY_COL1"]
+    else: keycol = default_col[0]
+
+    if "CKEY_COL2" in os.environ: valcol = os.environ["CKEY_COL2"]
+    else: valcol = default_col[1]
+
+    if "CKEY_COL3" in os.environ: hicol = os.environ["CKEY_COL3"]
+    else: hicol = default_col[2]
+
+    #
+    # Parse command-line arguments
+    #
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "d:hk:r:v:x:")
+    except getopt.GetoptError as err:
+        print str(err)
+        print "Type: '%s -h' for help" % CALL
+        exit(1)
+
+    for o, a in opts:
+        if o == "-d": delim = a
+        elif o == "-h":
+            usage()
+            exit(2)
+        elif o == "-k": keycol = a
+        elif o == "-r": regex_hi = a
+        elif o == "-v": valcol = a
+        elif o == "-x": hicol = a
+
+    #
+    # Compile REs ahead of main loop
+    #
+    re_split = re.compile("(" + delim + ")")
+    re_delim = re.compile(delim + "$")
+    re_startblank = re.compile("^[ \t]")
+    re_lastval = re.compile("[^ \t]*$")
+    re_newkey = re.compile("^.*[ \t]")
+    if regex_hi != None: re_highlight = re.compile('(' + regex_hi + ')')
+
+    #
+    # Process stdin
+    #
+    for line in sys.stdin:
+        #
+        # Any text before a delimiter is the key and needs the key colour
+        # - anything afterwards is the value and needs the value colour
+        #
+        lst = re.split(re_split, line.rstrip())
+        c = 0
+        nline = ""
+        lastcol = valcol
+        lastnum = 1
+        for i in range(len(lst)):
+            s = lst[i]
+            thiscol = valcol
+            thisnum = 1
+            if c<2:
+                thiscol = keycol
+                thisnum = 0
+            elif re.match(re_delim, s):
+                thiscol = lastcol
+                thisnum = lastnum
+            elif i+2 < len(lst) and re.match(re_delim, lst[i+1]) \
+                    and re.match(re_startblank, lst[i+2]):
+
+                s_val = re.sub(re_lastval, "", s)
+                s = re.sub(re_newkey, "", s)
+
+                suffix = ""
+                if len(s)>0 and (s[0] == "(" or s[0] == "["):
+                    suffix = s[0]
+                    s = s[1:]
+
+                nline += add_colour(s_val + suffix, valcol, 1)
+                thiscol = keycol
+                thisnum = 0
+
+            nline += add_colour(s, thiscol, thisnum)
+            lastcol = thiscol
+            lastnum = thisnum
+            c += 1
+
+        #
+        # Apply regex highlight if we have one
+        # 
+        if regex_hi != None:
+            c = 0
+            hline = ""
+            for s in re.split(re_highlight, nline):
+                c += 1
+                if c%2 == 1: hline += s
+                else: hline += add_colour(s, hicol, 2)
+
+            nline = hline
+
+        print nline
+
+if __name__ == "__main__": main()

@@ -1,0 +1,124 @@
+.TH rifle "1" "15 August 2016" "User Commands"
+.SH NAME
+rifle \- Display paths and values in Quattor profile
+.SH SYNOPSIS
+.B rifle
+[\fB-ehIkv\fR] [\fB-o\fR \fIoutput\fR]
+\fIfile\fR [\fIresource_path\fR ...]
+.br
+.B rifle
+[\fB-ehIkv\fR] [\fB-o\fR \fIoutput\fR]
+\fB-c\fR [\fIresource_path\fR ...]
+.br
+.B rifle
+[\fB-ehIkv\fR] [\fB-o\fR \fIoutput\fR]
+\fB-g\fR {\fIhost\fR|\fIalias\fR} [\fIresource_path\fR ...]
+.br
+.B rifle
+[\fB-ehIkv\fR] [\fB-o\fR \fIoutput\fR]
+\fB-G\fR \fIcluster\fR [\fIresource_path\fR ...]
+.SH DESCRIPTION
+Displays paths and values in Quattor XML or JSON profile data in the format:
+
+    \fB/path/key\fR = \fBvalue\fR
+
+If a
+.I file
+is provided, this can be the path to an XML or JSON file or a compressed
+XML or JSON file.
+.SH OPTIONS
+The following options are supported:
+.RS 4
+.TP 4
+.B -c
+Use current profile for this host instead of requiring a pathname to
+a profile.
+.TP
+.B -e
+Remove Quattor-style escaping from output.  A single
+.B -e
+unescapes path components only.  A double
+.B -ee
+unescapes values as well.  WARNING: use this option with care, this tool
+cannot know which elements were escaped and which ones were not.
+.TP
+.B -G
+Download profile for named cluster or metacluster using
+.BR getprof .
+.TP
+.B -g
+Download profile for named host using
+.BR getprof .
+.TP
+.B -h
+Hide structural entries that do not have values.
+.TP
+.B -I
+Do not generate index numbers for each element of a list, using a hash #
+character instead.  This makes it easier to compare profiles with
+.BR prdiff .
+.TP
+.B -k
+Colourise by sending the output to
+.BR ckey .
+.TP
+.BI -o " output"
+Send output to given filename instead of to stdout.
+.TP
+.B -p
+If a value contains newlines, prefix each newline with the resource path
+as well as the first line.
+.TP
+.B -v
+Display values only.
+.RE
+.SH EXAMPLES
+.TP 3
+1.
+Display keys and values underneath
+.B /software/components/spma
+for current host:
+
+.RS 6
+.B "rifle -c /software/components/spma"
+.RE
+.TP
+2.
+Display keys and values underneath
+.B /software/packages
+for a profile stored as a compressed XML file:
+
+.RS 6
+.B "rifle host1.foo.acme.com.xml.gz /software/packages"
+.RE
+.TP
+3.
+Display keys and values underneath
+.B /metadata
+for the profile of a named host, obtained by downloading the profile from
+the Aquilon broker via the
+.B getprof
+tool:
+
+.RS 6
+.B "rifle -g ilab901.one-nyp /metadata"
+.RE
+.SH NOTES
+A faster tool is available for processing Quattor JSON profiles, which
+may be preferred, see
+.BR trifle (1).
+.SH "SEE ALSO"
+.BR trifle (1),
+.BR aqs (1),
+.BR ckey (1),
+.BR getprof (1),
+.BR prdiff (1),
+.BR aqs.tab (5).
+.SH AUTHORS
+Mark R. Bannister <mark.bannister@morganstanley.com>
+.SH LICENSE
+Use of this software is subject to the Apache 2 License:
+.br
+http://www.opensource.org/licenses/apache2.0
+
+See source code for the COPYRIGHT file.

@@ -1,0 +1,105 @@
+.TH ckey "1" "30 March 2015" "User Commands"
+.SH NAME
+ckey \- Adds colour to key/value pairs on stdin
+.SH SYNOPSIS
+.B ckey
+[\fB-d\fR \fIdelimit\fR] [\fB-k\fR \fIcolcode\fR]
+[\fB-r\fR \fIre\fR] [\fB-v\fR \fIcolcode\fR]
+[\fB-x\fR \fIcolcode\fR]
+.br
+.B "ckey -h"
+.SH DESCRIPTION
+Adds colour to key/value pairs on stdin, where the keys and values can
+have different colours and are identified by a delimiter.
+.SH OPTIONS
+The following options are supported:
+.RS 4
+.TP 4
+.BI -d " delim"
+Changes regular expression used for identifying key/value delimiter.
+The default is '\fB[:=]\fR'.
+.TP
+.B -h
+Displays a help message.
+.TP
+.BI -k " colcode"
+Changes colour for keys.  Default is
+.BR green .
+.TP
+.BI -r " re"
+Highlight wherever a given regular expression matches.
+.TP
+.BI -v " colcode"
+Changes colour for values.  Default is
+.BR cyan .
+.TP
+.BI -x " colcode"
+Changes colour for regex matching.  Default is
+.BR yellow:reverse .
+.RE
+.SH "COLOUR CODES"
+A
+.I colcode
+can describe text colours, highlights and attributes.  The format is:
+
+    [\fIcolour\fR][:\fIattribute\fR][,\fIattribute\fR ...]]
+
+where
+.RS 4
+.TP 4
+.I colour
+can be:
+.BR grey ,
+.BR red ,
+.BR green ,
+.BR yellow ,
+.BR blue ,
+.BR magenta ,
+.BR cyan ,
+.BR white ,
+or it can be omitted to use the current colour.
+.TP
+.I attribute
+can be:
+.BR on_grey ,
+.BR on_red ,
+.BR on_green ,
+.BR on_yellow ,
+.BR on_blue ,
+.BR on_magenta ,
+.BR on_cyan ,
+.BR on_white ,
+.BR bold ,
+.BR dark ,
+.BR underline ,
+.BR blink ,
+.B reverse
+or
+.BR concealed .
+.RE
+.LP
+For example,
+.B "-k red:bold,on_white -v :bold"
+will make keys appear in bold red text on a white background, and values
+will be made to be bold but will otherwise use their default colour.
+.SH "ENVIRONMENT VARIABLES"
+The colours may also be changed using the environment variables:
+.RS 4
+.TP 10
+.B CKEY_COL1
+for keys
+.TP
+.B CKEY_COL2
+for values
+.TP
+.B CKEY_COL3
+for regex matches.
+.RE
+.SH AUTHORS
+Mark R. Bannister <mark.bannister@morganstanley.com>
+.SH LICENSE
+Use of this software is subject to the Apache 2 License:
+.br
+http://www.opensource.org/licenses/apache2.0
+
+See source code for the COPYRIGHT file.

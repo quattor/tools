@@ -1,0 +1,158 @@
+.TH prdiff "1" "24 May 2016" "User Commands"
+.SH NAME
+prdiff \- Compares Quattor host profiles
+.SH SYNOPSIS
+.B prdiff
+[\fB-eIkp\fR] [\fB-- diff-options\fR]
+[\fIfrom-file\fR] \fIto-file\fR
+.br
+.B prdiff
+[\fB-eIkp\fR] \fB-g\fR [\fB-- diff-options\fR]
+[\fIfrom-host\fR] \fIto-host\fR
+.br
+.B prdiff
+[\fB-eIkp\fR] \fB-c\fR [\fB-- diff-options\fR]
+.br
+.B "prdiff -l"
+.br
+.B prdiff
+[\fB-eIkp\fR] \fB-n\fR [\fB-- diff-options\fR]
+[\fIfrom-num\fR] \fIto-num\fR
+.RE
+.SH DESCRIPTION
+Compares Quattor XML profiles with the
+.B diff
+tool.  There are five modes of operation.
+
+In the first synopsis form,
+.I from-file
+and
+.I to-file
+specify the location of
+.B .xml
+or
+.B .xml.gz
+files to compare.
+
+In the second synopsis form, the
+.B -g
+option instructs
+.B prdiff
+to download the host profiles for
+.I from-host
+and
+.I to-host
+using the
+.B getprof
+tool first and compare those.
+
+In the third synopsis form, the
+.B -c
+option instructs
+.B prdiff
+to use the current host profile in
+.BR /var/lib/ccm ,
+and to download the host's latest profile using
+.BR getprof ,
+and compare those.  This is useful for determining what changes
+are pending for the host that have not yet been downloaded by the
+dispatch process.
+
+In the fourth synopsis form, the
+.B -l
+option lists all profiles (current and previous) in
+.B /var/lib/ccm
+on this host.
+
+In the fifth synopsis form, the
+.B -n
+option instructs
+.B prdiff
+to compare profiles on-host identified by number.  The numbers can be
+determined by running
+.BR "prdiff -l" .
+If the text
+.B current
+is used instead of a number, the current active profile is assumed.
+
+If
+.IR from-file ,
+.I from-host
+or
+.I from-num
+is omitted, the default will be to compare the current host profile (as with
+.BR -c )
+with the argument that is provided.
+
+.B prdiff
+works by passing each profile through the
+.B rifle
+tool before sending to the
+.B diff
+command.
+.SH OPTIONS
+The following options are supported:
+.RS 4
+.TP 4
+.BI -e
+The
+.B -e
+or
+.B -ee
+flag if given is passed through to the
+.B rifle
+tool to request that Quattor unescaping is performed prior to the
+.BR diff .
+See
+.BR rifle (1).
+.TP
+.B -I
+Passed through to the
+.B rifle
+tool to request that index numbers are not generated for list elements.
+This makes it easier to compare profiles when elements in a list are
+inserted or removed.
+.TP
+.B -k
+Adds colour to key/value pairs in the
+.B diff
+output via the
+.B ckey
+tool.
+See
+.BR ckey (1).
+.TP
+.B -p
+Passed through to the
+.B rifle
+tool to request that values with newlines are prefixed by the resource path.
+See
+.BR rifle (1).
+.RE
+.LP
+Any
+.I diff-options
+provided will be passed directly to
+.BR diff ,
+see
+.BR diff (1).
+For example,
+.B "prdiff -- -c"
+will provide a context diff, while
+.B "prdiff -- -u"
+a unified diff.
+.SH "SEE ALSO"
+.BR ckey (1),
+.BR diff (1),
+.BR getprof (1),
+.BR rifle (1),
+.BR diffprof (1),
+.BR aqs.tab (5).
+.SH AUTHORS
+Mark R. Bannister <mark.bannister@morganstanley.com>
+.SH LICENSE
+Use of this software is subject to the Apache 2 License:
+.br
+http://www.opensource.org/licenses/apache2.0
+
+See source code for the COPYRIGHT file.

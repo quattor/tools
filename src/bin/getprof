@@ -1,0 +1,229 @@
+#!/bin/ksh
+##############################################################################
+#
+# See COPYRIGHT file in source distribution for copyright holders
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+##############################################################################
+CALL=$(basename $0)
+AQD_HOST=${AQD_HOST:-nyaqd1}
+AWK=/bin/nawk
+[ -x /bin/gawk ] && AWK=/bin/gawk
+TMPFILE=/tmp/tmp.$CALL.$$
+DEBUG=0
+
+trap 'rm -f $TMPFILE' HUP INT TERM EXIT
+
+##############################################################################
+#
+# syntax()
+#
+# Display command syntax
+#
+##############################################################################
+function syntax
+{
+    cat << EOF >&2
+
+Syntax: $CALL [-Ds] {<host>|<alias>}
+        $CALL [-Ds] -C <cluster>
+        $CALL -h
+EOF
+}
+
+##############################################################################
+#
+# usage()
+#
+# Display help message
+#
+##############################################################################
+function usage
+{
+    syntax
+    cat << EOF >&2
+
+Download host or cluster profile from Aquilon broker and send to stdout.
+
+By default, one profile is downloaded over HTTP, after alias expansion
+from ~/etc/aqs.tab.  The DNS domain name may be omitted, in which case
+it will be added from /etc/resolv.conf.
+
+Options:
+
+    -C  download cluster profile instead of host profile.
+    -D  turn on debugging.
+    -h  displays this help message.
+    -s  use SSH instead of HTTP to download one or more matching profiles.
+        If more than one profile is matched, then all matching profiles will
+        be sent in succession to stdout.  The number of matching profiles
+        will be reported to stderr.
+
+EOF
+}
+
+##############################################################################
+#
+# get_domains()
+#
+# Get space-separated list of DNS domains from /etc/resolv.conf
+#
+##############################################################################
+function get_domains
+{
+    [ -r /etc/resolv.conf ] &&
+        $AWK '/^domain/ || /^search/ {$1=""; print}' /etc/resolv.conf
+
+    echo -
+}
+
+##############################################################################
+#
+# web_download()
+#
+# Find a profile for the given hostname, may have to attempt to
+# suffix multiple DNS domain names from /etc/resolv.conf
+#
+##############################################################################
+function web_download
+{
+    typeset object=$1
+
+    if [ $cluster -eq 0 ]; then
+        for domain in $(get_domains); do
+            if [ "x$domain" = x- ]; then
+                domain=
+            else
+                domain=".$domain"
+                [ "${object%$domain}" != "$object" ] && domain=
+            fi
+
+            [ $DEBUG -eq 1 ] && echo $CALL: trying $object$domain ... >&2
+            web_get $object$domain && return
+        done
+    else
+        web_get $object && return
+    fi
+
+    echo "$CALL: profile not found for '$1'" >&2
+    return 1
+}
+
+##############################################################################
+#
+# web_get()
+#
+# Attempt to get profile with curl and send to stdout
+#
+# Returns 1 if the document that is downloaded is not a host profile
+# (e.g. HTTP error document)
+#
+##############################################################################
+function web_get
+{
+    typeset object=$1
+
+    if ! curl -o $TMPFILE http://$AQD_HOST/$profiles/$object.xml \
+                                > /dev/null 2>&1; then
+        echo "$CALL: curl failed to download from $AQD_HOST" >&2
+        return 1
+    fi
+
+    if [ -s $TMPFILE -a \
+            "$(dd if=$TMPFILE bs=1 count=5 2> /dev/null)" = "<?xml" ]; then
+
+        cat $TMPFILE
+        return 0
+    fi
+
+    #
+    # This is not a Quattor XML profile
+    #
+    return 1
+}
+
+##############################################################################
+#
+# ssh_download()
+#
+# Download one or more matching profiles using SSH
+#
+##############################################################################
+function ssh_download
+{
+    [ $DEBUG -eq 1 ] && echo $CALL: ssh to $AQD_HOST ... >&2
+    num_match=$(ssh $AQD_HOST ls /var/quattor/web/htdocs/$profiles/$1*.xml.gz \
+                    2>/dev/null | wc -l)
+    s=
+    [ $num_match -ne 1 ] && s=s
+
+    echo $CALL: $AQD_HOST: $num_match matching profile$s >&2
+    if [ $num_match -gt 0 ]; then
+        ssh $AQD_HOST gunzip -c /var/quattor/web/htdocs/$profiles/$1*.xml.gz
+    fi
+}
+
+##############################################################################
+# START HERE
+##############################################################################
+
+#
+# Parse command-line arguments
+#
+help=0
+use_ssh=0
+cluster=0
+profiles=profiles
+
+while getopts CDhs opt
+do
+    case $opt in
+        C)    cluster=1; profiles=profiles/clusters;;
+        D)    DEBUG=1;;
+        h)    help=2;;
+        s)    use_ssh=1;;
+        ?)    help=1;;
+    esac
+done
+shift $((OPTIND - 1))
+
+[ $help -eq 0 -a $# -ne 1 ] && help=1
+
+if [ $help -eq 1 ]; then
+    syntax
+    exit 2
+elif [ $help -eq 2 ]; then
+    usage
+    exit 2
+fi
+
+if [ $use_ssh -eq 1 ]; then
+    ssh_download $1
+else
+    object=$1
+    if [ $cluster -eq 0 ]; then
+        #
+        # Lookup alias expansion in ~/etc/aqs.tab
+        # or etc/aqs.tab relative to the location of this script
+        #
+        if [ -f ~/etc/aqs.tab ]; then
+            s=$($AWK -v host=$object '$1 == host { print $2; exit }' ~/etc/aqs.tab $CALLDIR/../etc/aqs.tab 2> /dev/null)
+            if [ -n "$s" ]; then
+                [ $DEBUG -eq 1 ] && echo $CALL: expanded by aqs.tab: $s >&2
+                object="$s"
+            fi
+        fi
+    fi
+    web_download $object
+fi
