@@ -1,0 +1,145 @@
+#!/bin/ksh
+##############################################################################
+#
+# See COPYRIGHT file in source distribution for copyright holders
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+##############################################################################
+
+CALL=$(basename $0)
+CALLDIR=$(dirname $0)
+TMPFILE=/tmp/tmp.$CALL.$$
+AWK=/bin/nawk
+[ -x /bin/gawk ] && AWK=/bin/gawk
+AQ=aq
+debug=0
+
+col_table=$(tput setf ${AQNET_COL1:=2})
+col_field=$(tput setf ${AQNET_COL2:=6})
+col_off=$(tput sgr0)
+
+trap 'rm -f $TMPFILE' INT HUP TERM EXIT
+
+##############################################################################
+#
+# syntax()
+#
+# Display command syntax
+#
+##############################################################################
+function syntax
+{
+    cat << EOF >&2
+
+Syntax: $CALL [-Dl] <network_device>
+        $CALL -h
+EOF
+}
+
+##############################################################################
+#
+# usage()
+#
+# Display help message
+#
+##############################################################################
+function usage
+{
+    syntax
+    cat << EOF >&2
+
+Shortcut for 'aq show network device', where:
+
+    -D    turn on debugging.
+    -h    displays this help message.
+    -l    displays long output instead of short output.
+
+The colour of the table and fields may be varied with the AQNET_COL1 and
+AQNET_COL2 environment variables, which may be set to an ANSI colour
+code between 0 (black) and 7 (white).
+EOF
+}
+
+##############################################################################
+# START HERE
+##############################################################################
+
+#
+# Parse command-line arguments
+#
+help=0
+long=0
+
+while getopts Dhl opt
+do
+    case $opt in
+        D)    debug=1;;
+        h)    help=2;;
+        l)    long=1;;
+        ?)    help=1;;
+    esac
+done
+shift $((OPTIND - 1))
+
+[ $help -eq 0 -a $# -ne 1 ] && help=1
+
+if [ $help -eq 1 ]; then
+    syntax
+    exit 2
+elif [ $help -eq 2 ]; then
+    usage
+    exit 2
+fi
+
+[ $debug -eq 1 ] &&
+    echo "$CALL: running: $AQ show network device --network_device $1" >&2
+
+if [ $long -eq 1 ]; then
+    $AQ show network device --network_device $1 |\
+        sed 's/last seen/last_seen/' | ckey
+else
+    $AQ show network device --network_device $1 |\
+            $AWK -v col_table="$col_table" -v col_field="$col_field" \
+                 -v col_off="$col_off" '
+
+        BEGIN { r=1 }
+        /^  Primary Name:/ { row[1]=$0 }
+        /^  Interface: / { row[++r]=$2; provides=0 }
+        /^    Provides: / && !provides {
+            provides=1; gsub("[][]", ""); row[r]=row[r] " " $2 " " $3
+        }
+
+        END {
+            if (!row[1]) exit
+            print "\n" col_table row[1] col_off "\n"
+            for (j=1; j<=2; j++) {
+                for (i=2; i<=r; i++) {
+                    sub("^ *", "", row[i])
+                    n=split(row[i], a)
+                    if (j==1) {
+                        # First pass calc column width only
+                        if (length(a[3])> width[1]) width[1]=length(a[3])
+                        if (length(a[1])> width[2]) width[2]=length(a[1])
+                    } else {
+                        printf("%s%-" width[1] "s%s %s|%s %s%-" \
+                                width[2] "s%s %s|%s %s%s%s\n",
+                                   col_field, a[3], col_off, col_table, col_off,
+                                   col_field, a[1], col_off, col_table, col_off,
+                                   col_field, a[2], col_off)
+                    }
+                }
+            }
+        }
+    '
+fi

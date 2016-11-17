@@ -1,0 +1,144 @@
+.TH diffprof "1" "15 August 2016" "User Commands"
+.SH NAME
+diffprof \- Compare multiple Quattor profiles
+.SH SYNOPSIS
+.B diffprof
+[\fB-aDefGgIiPrx\fR]
+[\fB-d\fR \fIre\fR]
+[\fB-o\fR \fIoutput\fR]
+[\fB-p\fR \fIworkers\fR] \\
+.br
+.RS 21
+[\fB-U\fR \fIlines\fR]
+[\fB-z\fR \fIcompresslevel\fR]
+\fIdir1\fR \fIdir2\fR
+.RE
+.br
+.B "diffprof -h"
+.RE
+.SH DESCRIPTION
+Find differences between Quattor profiles in two distinct directories.
+The directories should each contain the same number of profiles with the same
+names.  The tool will report only the common set of differences.
+.SH OPTIONS
+The following options are supported:
+.RS 4
+.TP 4
+.B -a
+Report all names of host profiles that introduced each difference.
+This option is passed to
+.BR diffuniq .
+See
+.BR diffuniq (1).
+.TP
+.BI -D
+Enables debug output.
+.TP
+.BI -d " re"
+Discard hunks matching the given regular expression. You may specify the
+\fB-d\fR option multiple times to test against multiple REs. This option is
+passed to
+.BR diffuniq .
+See
+.BR diffuniq (1).
+.TP
+.B -e
+Pass
+.B -e
+or
+.B -ee
+to
+.B rifle
+when translating to resource paths (\fB-x\fR).  This unescapes components
+in the Quattor path.  See
+.BR rifle (1).
+.TP
+.B -f
+Force translation of resource paths to occur even if the profile
+has not changed since the last time and intermediate files are
+in-place, i.e. only has effect with options \fB-i\fR and \fB-x\fR as well.
+.TP
+.B -G
+Don't use a progress bar in non-debug mode.
+.TP
+.B -g
+Use a Unicode progress bar instead of the ASCII # symbol.
+.TP
+.B -h
+Displays a help message.
+.TP
+.B -I
+Pass
+.B -I
+to
+.B rifle
+when translating to resource paths (\fB-x\fR).  This ensures that list index
+numbers are replaced by a hash # and makes comparisons easier when items
+have been added or removed from a list.  See
+.BR rifle (1).
+.TP
+.B -i
+Create intermediate files in-place when translating (\fB-x\fR) and do
+not delete these files.  If they exist already when this tool is used
+and they are newer than the corresponding profile they will
+not be re-generated.
+.TP
+.BI -o " output"
+Send output to given file, instead of to stdout.
+.TP
+.B -P
+List personalities with differences.  Only when
+.B -a
+is also used.
+.TP
+.BI -p " workers"
+Maximum number of worker processes to use when translating to resource
+paths (\fB-x\fR).  May use less workers than this if there are not
+enough files to process.  The default is the number of available
+CPU cores.
+
+If there is only one worker process in debug mode (\fB-D\fR) then resource
+path translation will occur in the main process without spawning any new
+processes.
+.TP
+.B -r
+Use
+.B rifle
+tool for all profile conversion (\fB-x\fR), not
+.BR trifle .
+Normal behaviour is to use
+.B trifle
+for JSON profiles and
+.B rifle
+for XML profiles.
+.TP
+.BI -U " lines"
+Number of lines of context to produce in unified diff output.
+.TP
+.B -x
+Translate to resource paths first using
+.BR "rifle -p" .
+See
+.BR rifle (1).
+.TP
+.BI -z " compresslevel"
+Level of compression to use when writing
+.B gzip
+files via the
+.B -x
+option, where 1 is fastest with least compression, 9 is slowest with best
+compression and 0 is no compression.  Default is 1.
+.SH "SEE ALSO"
+.BR diffuniq (1),
+.BR prdiff (1),
+.BR razor (1),
+.BR rifle (1),
+.BR trifle (1).
+.SH AUTHORS
+Mark R. Bannister <mark.bannister@morganstanley.com>
+.SH LICENSE
+Use of this software is subject to the Apache 2 License:
+.br
+http://www.opensource.org/licenses/apache2.0
+
+See source code for the COPYRIGHT file.

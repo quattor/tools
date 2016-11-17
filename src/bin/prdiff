@@ -1,0 +1,302 @@
+#!/bin/bash
+##############################################################################
+#
+# See COPYRIGHT file in source distribution for copyright holders
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+##############################################################################
+CALL=$(basename $0)
+CALLDIR=$(dirname $0)
+GETPROF=$CALLDIR/getprof
+RIFLE=$CALLDIR/rifle
+CKEY=$CALLDIR/ckey
+TMPDIR=/tmp/tmp.$CALL.$$
+CCM_DIR=/var/lib/ccm
+
+AWK=/bin/nawk
+[ -x /bin/gawk ] && AWK=/bin/gawk
+
+trap 'rm -fr $TMPDIR' INT HUP TERM EXIT
+
+function Display_syntax
+{
+    cat << EOF
+Syntax: $CALL [-eIkp] [-- <diff-options>] [<from-file>] <to-file>
+        $CALL [-eIkp] -g [-- <diff-options>] [<from-host>] <to-host>
+        $CALL [-eIkp] -c [-- <diff-options>]
+        $CALL -l | [-eIkp] -n [-- <diff-options>] <from-num> [<to-num>]
+EOF
+}
+
+function Display_help
+{
+    Display_syntax
+    cat << EOF
+
+Compares Quattor host profiles.  There are four modes of operation:
+
+   * In the first form, <from-file> and <to-file> specify the location of
+     '.xml' or '.xml.gz' files to compare.
+
+   * In the second form, the -g option instructs prdiff to download the
+     host profiles for <from-host> and <to-host> using the getprof tool first
+     and compare those.
+
+   * In the third form, the -c option instructs prdiff to use the current
+     host profile in $CCM_DIR, and to download the host's latest
+     profile using getprof, and compare those.
+
+   * In the fourth form, the -l option lists all profiles (current and
+     previous) in $CCM_DIR on this host, and -n compares profiles
+     on-host identified by number.  If the text 'current' is used instead
+     of a number, the current active profile is assumed.
+
+If <from-file>, <from-host> or <from-num> is omitted, the default will be to
+compare the current host profile (as with -c) with the argument provided.
+
+prdiff works by passing each profile through the rifle(1) tool before sending
+to the diff command.
+
+The following additional options are supported:
+
+    -e          passed to rifle to remove Quattor-style escaping from output
+                  - a single -e unescapes path components only
+                  - a double -ee unescapes values as well
+    -I          passed to rifle to request that index numbers are not generated
+                for list elements, use a hash # instead
+    -k          add colour to key/value pairs in the diff output by piping
+                the result through to ckey(1)
+    -p          passed to rifle to request that values with newlines are
+                prefixed by the resource path
+
+Any <diff-options> provided will be passed directly to diff(1).  For example,
+'$CALL -- -c' will provide a context diff, '$CALL -- -u' a unified diff, etc.
+EOF
+    exit 1
+}
+
+function Bad_syntax
+{
+    Display_syntax
+    echo Run $CALL with no arguments for help
+    exit 2
+}
+
+function Error
+{
+    echo $CALL: error: $* >&2
+    exit 3
+}
+
+function Check_profile
+{
+    typeset profile=$1
+
+    #
+    # Check profile is readable
+    #
+    [ -r $profile ] || Error cannot read profile: $profile
+
+    #
+    # Check profile is not empty
+    #
+    [ -s $profile ] || Error profile is empty: $profile
+
+    #
+    # Check there is one and only one XML document in the file
+    #
+    numxml=$(grep -c '^<?xml' $profile)
+    [ $numxml -eq 0 ] && Error profile contains no XML: $profile
+    [ $numxml -gt 1 ] && Error profile contains \>1 XML document: $profile
+}
+
+function Download_profile
+{
+    typeset setvar=$1 hostname=$2 savefile=$3
+
+    echo $CALL: downloading Quattor host profile for $hostname >&2
+    $GETPROF $hostname > $savefile ||
+                     Error could not download host profile for $hostname
+    eval $setvar=\$savefile
+}
+
+function Number_profile
+{
+    typeset setvar=$1 num=$2 current
+
+    [ ! -d $CCM_DIR ] && Error "not found: $CCM_DIR (is this an Aquilon host?)"
+
+    if [ "x$num" = "xcurrent" ]; then
+        current=
+        [ -r $CCM_DIR/current.cid ] && current=$(<$CCM_DIR/current.cid)
+        [ -z "$current" ] && Error current profile not set
+        num=$current
+    fi
+    eval $setvar=\$CCM_DIR/profile.\$num/profile.xml
+}
+
+function Diff
+{
+    if [ $ckey -eq 0 ]; then
+        /usr/bin/diff "$@"
+    else
+        /usr/bin/diff "$@" | $CKEY
+    fi
+}
+
+function List_current_profiles
+{
+    typeset current
+
+    [ ! -d $CCM_DIR ] && Error "not found: $CCM_DIR (is this an Aquilon host?)"
+
+    current=
+    [ -r $CCM_DIR/current.cid ] && current=$(<$CCM_DIR/current.cid)
+
+    ls -ltr $CCM_DIR/profile.*/profile.xml |\
+            $AWK -v current=$current -F'[ /.]*' '{
+                printf("%s %2d %s, size %4.1fkb, profile #%d%s\n",
+                        $6, $7, $8, $5/1024, $(NF-2),
+                        $(NF-2) == current ? " (current)" : "")
+            }'
+    exit 0
+}
+
+##############################################################################
+# START HERE
+##############################################################################
+rifleopts=
+mode=file
+ckey=0
+
+[ $# -lt 1 ] && Display_help
+
+#
+# Parse command-line arguments
+#
+while getopts ceghIlknp c; do
+    case $c in
+        c)  mode=current;;
+        e)  rifleopts=e$rifleopts;;
+        g)  mode=get;;
+        h)  Display_help;;
+        I)  rifleopts=I$rifleopts;;
+        k)  ckey=1;;
+        l)  List_current_profiles;;
+        n)  mode=num;;
+        p)  rifleopts=p$rifleopts;;
+        \?) Bad_syntax;;
+    esac
+done
+[ -n "$rifleopts" ] && rifleopts="-$rifleopts "
+shift $((OPTIND-1))
+
+[ $mode != current -a $# -lt 1 ] && Bad_syntax
+
+#
+# Create temporary directory if required
+#
+if [ $mode != file ]; then
+    mkdir $TMPDIR || Error could not make temporary directory $TMPDIR
+fi
+
+if [ $mode != current ]; then
+    #
+    # Grab "to" argument
+    #
+    to_arg=${!#}
+
+    #
+    # Remove last argument
+    #
+    if [ $# -gt 1 ]; then
+        set - ${@:1:$(($#-1))}
+    else
+        shift
+    fi
+
+    if [ $# -gt 0 ]; then
+        #
+        # Grab "from" argument
+        #
+        from_arg=${!#}
+
+        #
+        # Remove last argument
+        #
+        if [ $# -gt 1 ]; then
+            set - ${@:1:$(($#-1))}
+        else
+            shift
+        fi
+
+        #
+        # Process "from" argument (from-file or from-host)
+        #
+        if [ $mode = get ]; then
+            Download_profile from_file $from_arg $TMPDIR/$from_arg
+        elif [ $mode = num ]; then
+            Number_profile from_file $from_arg
+        else
+            from_file=$from_arg
+        fi
+    elif [ $mode = num ]; then
+        Number_profile from_file $to_arg
+        to_arg=current
+    else
+        Number_profile from_file current
+    fi
+
+    Check_profile $from_file
+
+    #
+    # Process "to" argument (to-file, to-host or to-num)
+    #
+    if [ $mode = get ]; then
+        Download_profile to_file $to_arg $TMPDIR/$to_arg
+    elif [ $mode = num ]; then
+        Number_profile to_file $to_arg
+    else
+        to_file=$to_arg
+    fi
+
+    Check_profile $to_file
+
+    #
+    # Get rifle output to diff via named pipes
+    #
+    echo $CALL: comparing $from_file with $to_file >&2
+    Diff $@ <($RIFLE $rifleopts$from_file) \
+            <($RIFLE $rifleopts$to_file)
+else
+    #
+    # from-file is current profile (-c option to rifle)
+    # to-file needs to be downloaded
+    #
+    if [ $(uname -s) = SunOS ]; then
+        fqdn=$(hostname)
+    else
+        fqdn=$(hostname -f)
+    fi
+
+    from_txt=$TMPDIR/current
+    $RIFLE ${rifleopts}-c > $from_txt ||
+        Error "could not get current profile for this host (is this Aquilon?)"
+
+    Download_profile to_file $fqdn $TMPDIR/$fqdn
+    Check_profile $to_file
+
+    echo $CALL: comparing current profile with $to_file >&2
+    Diff $@ $from_txt <($RIFLE $rifleopts$to_file)
+fi

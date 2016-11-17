@@ -1,0 +1,19 @@
+@@ Difference #1 Occurrences #1
+-/system/services/dns/servers/0 = "infra3.foo.bar.com"
+-/system/services/dns/servers/1 = "infra4.foo.bar.com"
++/system/services/dns/servers/0 = "infra1.foo.bar.com"
++/system/services/dns/servers/1 = "infra2.foo.bar.com"
+@@ Difference #2 Occurrences #2
+-/system/services/dns/servers/0 = "infra1.foo.bar.com"
+-/system/services/dns/servers/1 = "infra2.foo.bar.com"
++/system/services/dns/servers/0 = "infra3.foo.bar.com"
++/system/services/dns/servers/1 = "infra4.foo.bar.com"
+@@ Difference #3 Occurrences #1
+-/hardware/cards/nic/eth0/hwaddr = "00:50:56:01:23:cd"
++/hardware/cards/nic/eth0/hwaddr = "00:50:56:01:23:ce"
+@@ Difference #4 Occurrences #1
+-/hardware/cards/nic/eth0/hwaddr = "00:50:56:01:25:c0"
++/hardware/cards/nic/eth0/hwaddr = "00:50:56:01:25:c1"
+@@ Difference #5 Occurrences #1
+-/hardware/cards/nic/eth0/hwaddr = "18:a9:05:42:a1:58"
++/hardware/cards/nic/eth0/hwaddr = "18:a9:05:42:a1:59"

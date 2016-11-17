@@ -1,0 +1,7 @@
+@@ Difference #1 Occurrences #2
+@@ Modified in: 2/host901.foo.bar.com.txt.gz
+@@ Modified in: 2/host902.foo.bar.com.txt.gz
+-/software/components/dirperm/paths/0/owner = root:sys
++/software/components/dirperm/paths/0/owner = root:bin
+@@ 2 profiles changed
+@@ 1 personality changed

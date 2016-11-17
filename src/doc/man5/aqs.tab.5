@@ -1,0 +1,48 @@
+.TH aqs.tab "5" "30 March 2015" "User Commands"
+.SH NAME
+aqs.tab \- Host alias table used by aqs tool
+.SH DESCRIPTION
+The
+.B aqs.tab
+file is used by the
+.B aqs
+tool as a convenient aliasing mechanism.  Hosts can be provided with an
+alias in this file, and the alias can be used instead of the fully-qualified
+hostname when supplied to the
+.BR aqs ,
+.BR getprof ,
+.B prdiff
+and
+.B xmlnm
+tools.
+
+The file can contain one or more lines of the following format:
+
+.RS 4
+.I "alias fqdn"
+.RE
+
+For example:
+
+.RS 4
+host1 host1.foo.acme.com
+.br
+host2 host2.foo.acme.com
+.br
+host3 host3.foo.acme.com
+.br
+host4 host4.foo.acme.com
+.RE
+.SH "SEE ALSO"
+.BR aqs (1),
+.BR getprof (1),
+.BR prdiff (1),
+.BR xmlnm (1).
+.SH AUTHORS
+Mark R. Bannister <mark.bannister@morganstanley.com>
+.SH LICENSE
+Use of this software is subject to the Apache 2 License:
+.br
+http://www.opensource.org/licenses/apache2.0
+
+See source code for the COPYRIGHT file.

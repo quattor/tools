@@ -1,0 +1,15 @@
+*.pyc
+*.swp
+Makefile
+config.h
+config.log
+config.status
+stamp-h1
+src/bin/diffuniq
+src/bin/razor
+src/bin/rifle
+src/bin/trifle
+src/bin/xmlnm
+src/trifle/.deps
+src/trifle/trifle
+src/trifle/trifle.o

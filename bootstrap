@@ -1,0 +1,6 @@
+#!/bin/sh -x
+#
+# Run bootstrap if you've changed any of the autoconf / automake files
+# This will create all the necessaries
+#
+aclocal && autoheader && automake --add-missing --copy && autoconf $*

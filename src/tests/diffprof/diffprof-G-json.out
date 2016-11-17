@@ -1,0 +1,49 @@
+@@ Difference #1 Occurrences #2
+           "199.99.99.99"
+         ],
+         "servers": [
+-          "infra1.foo.bar.com",
+-          "infra2.foo.bar.com"
++          "infra3.foo.bar.com",
++          "infra4.foo.bar.com"
+         ]
+       },
+       "lemon": {
+@@ Difference #2 Occurrences #1
+           "99.99.99.99"
+         ],
+         "servers": [
+-          "infra3.foo.bar.com",
+-          "infra4.foo.bar.com"
++          "infra1.foo.bar.com",
++          "infra2.foo.bar.com"
+         ]
+       },
+       "lemon": {
+@@ Difference #3 Occurrences #1
+       "nic": {
+         "eth0": {
+           "boot": true,
+-          "hwaddr": "00:50:56:01:25:c0",
++          "hwaddr": "00:50:56:01:25:c1",
+           "media": "Ethernet",
+           "name": "Generic Network Interface",
+           "port_group": "user-v712",
+@@ Difference #4 Occurrences #1
+       "nic": {
+         "eth0": {
+           "boot": true,
+-          "hwaddr": "18:a9:05:42:a1:58",
++          "hwaddr": "18:a9:05:42:a1:59",
+           "media": "Ethernet",
+           "name": "Generic Network Interface",
+           "pxe": true
+@@ Difference #5 Occurrences #1
+       "nic": {
+         "eth0": {
+           "boot": true,
+-          "hwaddr": "00:50:56:01:23:cd",
++          "hwaddr": "00:50:56:01:23:ce",
+           "media": "Ethernet",
+           "name": "Generic Network Interface",
+           "port_group": "transit-v717",

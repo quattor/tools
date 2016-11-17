@@ -1,0 +1,176 @@
+#!/usr/bin/env python
+##############################################################################
+#
+# See COPYRIGHT file in source distribution for copyright holders
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+##############################################################################
+
+import os, sys, getopt, re
+from tempfile import TemporaryFile
+
+CALL = os.path.basename(__file__)
+
+blobhash = {}
+
+##############################################################################
+
+def usage():
+    """ Displays a usage message. """
+
+    print """
+Syntax: %s [-a] [-d <re>] <filename>
+
+Takes diff output from git and produces a set of the unique differences.
+This is useful if many files have been changed in the same way, in order
+to reduce the output down to just the common set of changes.
+
+The -a option requests that all filenames that introduced a change are also
+reported in the output.
+
+If -d <re> is supplied, then the given regular expression is tested against
+each unique difference.  If it matches, that particular difference is
+discarded.  This is useful for filtering out changes that you wish to
+ignore.  You may specify the -d option multiple times to test against
+multiple REs.
+""" % CALL
+    exit(1)
+
+##############################################################################
+
+def save_blob(blob, filename):
+    """ Save unique blobs in a hash. """
+
+    if blob:
+        if blob in blobhash:
+            blobhash[blob].add(filename)
+        else:
+            newset = set()
+            newset.add(filename)
+            blobhash[blob] = newset
+
+##############################################################################
+
+def display_blobs(discard, add_files):
+    """ Displays contents of global blob hash. """
+
+    count = 1
+    for blob in blobhash:
+        ign_blob = False
+        for s in discard:
+            if re.search(s, blob): ign_blob = True
+
+        if not ign_blob:
+            print "@@ Difference #%d Occurrences #%d" % \
+                                        (count, len(blobhash[blob]))
+            if add_files:
+                print "@@ Modified in: " + \
+                            ("\n@@ Modified in: ".join(sorted(blobhash[blob])))
+
+            print blob,
+            count += 1
+
+##############################################################################
+
+def remove_common_path(line):
+    """ Find the two paths from a given diff command and return the
+        component from the last path that is unique. """
+
+    lst = line.split()
+    paths = [lst[-2], lst[-1]]
+    common = os.path.commonprefix(paths)
+    return lst[-1][common.rfind("/")+1:]
+    
+##############################################################################
+
+def grab_filechunk(f):
+    """ Process all differences between two sets of files in diff output,
+        then leave the file ready to read the next set of two files. """
+
+    lastpos = f.tell()
+
+    s = f.readline()
+    if s[0:4] != "diff":
+        sys.stderr.write("%s: error: unexpected input at %s[%d]\n" %
+                                        (CALL, f.name, f.tell()))
+        sys.stderr.write("%s: %s\n" % (CALL, s))
+        return False
+
+    filename = remove_common_path(s)
+    lastpos += len(s)
+    blob = ""
+    for line in f:
+        if line[0:4] == "diff":
+            # Found end of chunk, rewind file pointer and return
+            save_blob(blob, filename)
+            filename = remove_common_path(line)
+            f.seek(lastpos, os.SEEK_SET)
+            return True
+
+        lastpos += len(line)
+        chr = line[0:3]
+        if chr == "ind" or chr == "---" or chr == "+++":
+            # Filenames and index numbers are not important
+            continue
+
+        elif chr == "@@ ":
+            # Beginning of a new blob
+            save_blob(blob, filename)
+            blob = ""
+
+        else:
+            # Save line in current blob
+            blob += line
+
+    # Save last blob
+    save_blob(blob, filename)
+
+    # Found end of file, no more chunks to process
+    return False
+
+##############################################################################
+
+def main():
+    if len(sys.argv) < 2: usage()
+
+    # Parse command-line arguments
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "ad:h")
+    except getopt.GetoptError as err:
+        print str(err)
+        exit(1)
+
+    add_files = False
+    discard = []
+    for o, a in opts:
+        if o == "-a": add_files = True
+        elif o == "-d": discard.append(a)
+        elif o == "-h": usage()
+
+    file = args[0]
+
+    if not os.path.exists(file):
+        print "%s: file not found: %s" % (CALL, file)
+        exit(1)
+
+    if os.path.getsize(file) == 0:
+        print "%s: file is empty (no differences): %s" % (CALL, file)
+        exit(0)
+
+    with open(file, "r") as f:
+        while grab_filechunk(f): continue
+
+    display_blobs(discard, add_files)
+
+if __name__ == "__main__": main()

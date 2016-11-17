@@ -1,0 +1,9 @@
+@@ Difference #1 Occurrences #2
+                 <list name="paths">
+                     <nlist>
+                         <boolean name="checkmount">false</boolean>
+-                        <string name="owner">root:sys</string>
++                        <string name="owner">root:bin</string>
+                         <string name="path">/var/adm</string>
+                         <string name="perm">0775</string>
+                         <string name="type">d</string>

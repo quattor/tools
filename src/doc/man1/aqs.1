@@ -1,0 +1,106 @@
+.TH aqs "1" "12 March 2016" "User Commands"
+.SH NAME
+aqs \- Display an Aquilon host, cluster or metacluster object
+.SH SYNOPSIS
+.B aqs
+[\fB-Dd\fR] [\fB-bcprs\fR]
+{\fIhost\fR|\fIalias\fR}
+.br
+.B aqs
+[\fB-Dd\fR]
+.B -l
+{\fIhost\fR|\fIalias\fR}
+.br
+.B aqs
+[\fB-l\fR]
+.B -C
+.I cluster
+.br
+.B aqs
+[\fB-l\fR]
+.B -M
+.I metacluster
+.RE
+.SH DESCRIPTION
+Displays information about Aquilon hosts, cluster or metacluster objects.
+Shortcut for
+.BR "aq show host" ,
+.B "aq show cluster"
+and
+.BR "aq show metacluster" .
+
+Hostnames may be set-up as an alias in
+.BR ~/etc/aqs.tab ,
+see
+.BR aqs.tab (5).
+An alias may then be supplied to this command in place of a hostname.
+Alternatively, if a hostname does not appear in the aliases file, it may
+have the domain name from
+.B /etc/resolv.conf
+omitted, as this will be automatically added if it is missing.
+
+Output is colourised using
+.BR ckey (1).
+.SH OPTIONS
+The following options are supported:
+.RS 4
+.TP 4
+.BI -C " cluster"
+Displays information about the requested
+.IR cluster ,
+instead of displaying host information.
+.TP
+.B -D
+Enables debug output.
+.TP
+.B -d
+Uses
+.B aqdw
+instead of
+.BR aq .
+This only works for hosts, not clusters.
+.TP
+.B -h
+Displays a help message.
+.TP
+.B -l
+Displays long output instead of short output.
+.TP
+.BI -M " metacluster"
+Displays information about the requested
+.IR metacluster ,
+instead of displaying host information.
+.RE
+.LP
+Short output may be augmented for hosts using the following options, which
+add extra fields to the output:
+.RS 4
+.TP 4
+.B -b
+Adds build status.
+.TP
+.B -c
+Adds client bindings.
+.TP
+.B -p
+Adds physical properties (hardware data).
+.TP
+.B -r
+Adds regional properties (location data).
+.TP
+.B -s
+Adds server bindings.
+.RE
+.SH "SEE ALSO"
+.BR ckey (1),
+.BR getprof (1),
+.BR rifle (1),
+.BR aqs.tab (5).
+.SH AUTHORS
+Mark R. Bannister <mark.bannister@morganstanley.com>
+.SH LICENSE
+Use of this software is subject to the Apache 2 License:
+.br
+http://www.opensource.org/licenses/apache2.0
+
+See source code for the COPYRIGHT file.
