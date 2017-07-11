@@ -20,6 +20,7 @@ CALL=$(basename $0)
 AQD_HOST=${AQD_HOST:-nyaqd1}
 AWK=/bin/nawk
 [ -x /bin/gawk ] && AWK=/bin/gawk
+AQ=aq
 TMPFILE=/tmp/tmp.$CALL.$$
 DEBUG=0
 
@@ -36,8 +37,8 @@ function syntax
 {
     cat << EOF >&2
 
-Syntax: $CALL [-Ds] {<host>|<alias>}
-        $CALL [-Ds] -C <cluster>
+Syntax: $CALL [-Dms] [-d <path>] {<host>|<alias>} ...
+        $CALL [-Dms] [-d <path>] -C <cluster> ...
         $CALL -h
 EOF
 }
@@ -54,17 +55,26 @@ function usage
     syntax
     cat << EOF >&2
 
-Download host or cluster profile from Aquilon broker and send to stdout.
+Download one or more host or cluster profiles from Aquilon broker and send to
+stdout, or optionally to an elected output directory.
 
-By default, one profile is downloaded over HTTP, after alias expansion
+By default, the profiles are downloaded over HTTP, after alias expansion
 from ~/etc/aqs.tab.  The DNS domain name may be omitted, in which case
 it will be added from /etc/resolv.conf.
+
+Use the -d option if downloading more than one profile at a time.
 
 Options:
 
     -C  download cluster profile instead of host profile.
     -D  turn on debugging.
+    -d <path>
+        output directory.  If this is specified, the profile will be written
+        to the provided directory, creating it first if it does not exist,
+        rather than sending to stdout.
     -h  displays this help message.
+    -m  download member profiles from a given cluster as well as the cluster
+        profile.  Use with -C and -d.
     -s  use SSH instead of HTTP to download one or more matching profiles.
         If more than one profile is matched, then all matching profiles will
         be sent in succession to stdout.  The number of matching profiles
@@ -98,9 +108,9 @@ function get_domains
 ##############################################################################
 function web_download
 {
-    typeset object=$1
+    typeset object=$1 this_cluster=$2
 
-    if [ $cluster -eq 0 ]; then
+    if [ $this_cluster -eq 0 ]; then
         for domain in $(get_domains); do
             if [ "x$domain" = x- ]; then
                 domain=
@@ -110,10 +120,10 @@ function web_download
             fi
 
             [ $DEBUG -eq 1 ] && echo $CALL: trying $object$domain ... >&2
-            web_get $object$domain && return
+            web_get $object$domain $this_cluster && return
         done
     else
-        web_get $object && return
+        web_get $object $this_cluster && return
     fi
 
     echo "$CALL: profile not found for '$1'" >&2
@@ -132,9 +142,12 @@ function web_download
 ##############################################################################
 function web_get
 {
-    typeset object=$1
+    typeset object=$1 this_cluster=$2
+    typeset this_profile=$profiles
 
-    if ! curl -o $TMPFILE http://$AQD_HOST/$profiles/$object.xml \
+    [ $this_cluster -eq 1 ] && this_profile=$this_profile/clusters
+
+    if ! curl -o $TMPFILE http://$AQD_HOST/$this_profile/$object.xml \
                                 > /dev/null 2>&1; then
         echo "$CALL: curl failed to download from $AQD_HOST" >&2
         return 1
@@ -162,15 +175,70 @@ function web_get
 ##############################################################################
 function ssh_download
 {
+    typeset object=$1 this_cluster=$2
+    typeset this_profile=$profiles
+
+    [ $this_cluster -eq 1 ] && this_profile=$this_profile/clusters
+
     [ $DEBUG -eq 1 ] && echo $CALL: ssh to $AQD_HOST ... >&2
-    num_match=$(ssh $AQD_HOST ls /var/quattor/web/htdocs/$profiles/$1*.xml.gz \
+    num_match=$(ssh $AQD_HOST ls /var/quattor/web/htdocs/$this_profile/$object*.xml.gz \
                     2>/dev/null | wc -l)
     s=
     [ $num_match -ne 1 ] && s=s
 
     echo $CALL: $AQD_HOST: $num_match matching profile$s >&2
     if [ $num_match -gt 0 ]; then
-        ssh $AQD_HOST gunzip -c /var/quattor/web/htdocs/$profiles/$1*.xml.gz
+        ssh $AQD_HOST gunzip -c /var/quattor/web/htdocs/$this_profile/$object*.xml.gz
+    fi
+}
+
+##############################################################################
+#
+# get_profile()
+#
+# Download profile using either SSH or web
+#
+##############################################################################
+function get_profile
+{
+    typeset object=$1 this_cluster=$2
+
+    if [ $use_ssh -eq 1 ]; then
+        if [ -n "$outdir" ]; then
+            echo downloading profile to: "$outdir/$object.xml" >&2
+            if ! ssh_download $object $this_cluster > "$outdir/$object.xml"
+            then
+                rm -f "$outdir/$object.xml"
+                return 1
+            fi
+        else
+            ssh_download $object $this_cluster || return 1
+        fi
+    else
+        if [ $this_cluster -eq 0 ]; then
+            #
+            # Lookup alias expansion in ~/etc/aqs.tab
+            # or etc/aqs.tab relative to the location of this script
+            #
+            if [ -f ~/etc/aqs.tab ]; then
+                s=$($AWK -v host=$object '$1 == host { print $2; exit }' ~/etc/aqs.tab $CALLDIR/../etc/aqs.tab 2> /dev/null)
+                if [ -n "$s" ]; then
+                    [ $DEBUG -eq 1 ] && echo $CALL: expanded by aqs.tab: $s >&2
+                    object="$s"
+                fi
+            fi
+        fi
+
+        if [ -n "$outdir" ]; then
+            echo downloading profile to: "$outdir/$object.xml" >&2
+            if ! web_download $object $this_cluster > "$outdir/$object.xml"
+            then
+                rm -f "$outdir/$object.xml"
+                return 1
+            fi
+        else
+            web_download $object $this_cluster || return 1
+        fi
     fi
 }
 
@@ -182,23 +250,27 @@ function ssh_download
 # Parse command-line arguments
 #
 help=0
+outdir=
 use_ssh=0
 cluster=0
+members=0
 profiles=profiles
 
-while getopts CDhs opt
+while getopts CDd:hms opt
 do
     case $opt in
-        C)    cluster=1; profiles=profiles/clusters;;
+        C)    cluster=1;;
         D)    DEBUG=1;;
+        d)    outdir=$OPTARG;;
         h)    help=2;;
+        m)    members=1;;
         s)    use_ssh=1;;
         ?)    help=1;;
     esac
 done
 shift $((OPTIND - 1))
 
-[ $help -eq 0 -a $# -ne 1 ] && help=1
+[ $help -eq 0 -a $# -eq 0 ] && help=1
 
 if [ $help -eq 1 ]; then
     syntax
@@ -208,22 +280,28 @@ elif [ $help -eq 2 ]; then
     exit 2
 fi
 
-if [ $use_ssh -eq 1 ]; then
-    ssh_download $1
-else
-    object=$1
-    if [ $cluster -eq 0 ]; then
-        #
-        # Lookup alias expansion in ~/etc/aqs.tab
-        # or etc/aqs.tab relative to the location of this script
-        #
-        if [ -f ~/etc/aqs.tab ]; then
-            s=$($AWK -v host=$object '$1 == host { print $2; exit }' ~/etc/aqs.tab $CALLDIR/../etc/aqs.tab 2> /dev/null)
-            if [ -n "$s" ]; then
-                [ $DEBUG -eq 1 ] && echo $CALL: expanded by aqs.tab: $s >&2
-                object="$s"
-            fi
-        fi
+if [ -n "$outdir" ]; then
+    if ! mkdir -p "$outdir"; then
+        echo "$CALL: failed to create directory: $outdir" >&2
+        exit 1
     fi
-    web_download $object
 fi
+
+#
+# Process each provided host or cluster name in turn
+#
+while [ $# -gt 0 ]; do
+    get_profile $1 $cluster || exit 1
+
+    if [ $cluster -eq 1 -a $members -eq 1 ]; then
+        #
+        # Enumerate cluster members
+        #
+        [ $DEBUG -eq 1 ] && echo $CALL: finding cluster members ... >&2
+        for host in $($AQ search host --cluster $1); do
+            [ $DEBUG -eq 1 ] && echo $CALL: found cluster member: $host >&2
+            get_profile $host 0 || exit 1
+        done
+    fi
+    shift
+done
