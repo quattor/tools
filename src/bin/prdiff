@@ -226,7 +226,11 @@ if [ $mode != current ]; then
         shift
     fi
 
-    if [ $# -gt 0 ]; then
+    #
+    # If in number mode, be careful as topmost argument now might not be a
+    # number, it might be a diff option
+    #
+    if [ $# -gt 0 -a ! \( $mode = num -a -n "${!###[0-9]*}" \) ]; then
         #
         # Grab "from" argument
         #

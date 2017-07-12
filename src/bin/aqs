@@ -307,7 +307,7 @@ elif [ $cluster -eq 1 ]; then
     cluster=$1
     if [ $long -eq 0 ]; then
         $AQ show cluster --cluster $cluster |\
-            egrep 'Cluster:|Metacluster:|Cluster Personality:|  Domain:|Sandbox:|  Member:'| ckey
+            egrep 'Cluster:|Metacluster:|Cluster Personality:|  Domain:|Sandbox:|^  Member:'| ckey
     else
         $AQ show cluster --cluster $cluster | ckey
     fi
@@ -318,7 +318,7 @@ else
     metacluster=$1
     if [ $long -eq 0 ]; then
         $AQ show metacluster --metacluster $metacluster |\
-            egrep 'Cluster:|Cluster Personality:|  Domain:|Sandbox:|  Member:'| ckey
+            egrep 'Cluster:|Cluster Personality:|  Domain:|Sandbox:|^  Member:'| ckey
     else
         $AQ show metacluster --metacluster $metacluster | ckey
     fi

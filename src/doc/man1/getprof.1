@@ -1,26 +1,29 @@
-.TH getprof "1" "12 March 2016" "User Commands"
+.TH getprof "1" "28 April 2017" "User Commands"
 .SH NAME
 getprof \- Download host or cluster profile
 .SH SYNOPSIS
 .B getprof
-[\fB-Ds\fR] {\fIhost\fR|\fIalias\fR}
+[\fB-Dms\fR] [\fB-d\fR \fIpath\fR] {\fIhost\fR|\fIalias\fR} ...
 .br
 .B getprof
-[\fB-Ds\fR]
+[\fB-Dms\fR] [\fB-d\fR \fIpath\fR]
 .B -C
-.I cluster
+.IR cluster " ..."
 .br
 .B getprof
 .B -h
 .RE
 .SH DESCRIPTION
-Download host or cluster profile from Aquilon broker and send to stdout.
+Download one or more host or cluster profiles from Aquilon broker and send
+to stdout, or optionally to an elected output directory.
 
 By default, one profile is downloaded over HTTP, after alias expansion
 from
 .BR ~/etc/aqs.tab .
 The DNS domain name may be omitted, in which case it will be added from
 .BR /etc/resolv.conf .
+
+Use the -d option if downloading more than one profile at a time.
 .SH OPTIONS
 The following options are supported:
 .RS 4
@@ -31,8 +34,20 @@ Download cluster profile instead of host profile.
 .B -D
 Enables debug output.
 .TP
+.BI -d " path"
+Use this output directory instead of sending to stdout.  If this is specified,
+the profile will be written to the provided directory, creating it first if it
+does not exist, and will not send the profile to stdout.
+.TP
 .B -h
 Displays a help message.
+.TP
+.B -m
+Download member profiles from a given cluster as well as the cluster profile.
+Use with
+.B -C
+and
+.BR -d .
 .TP
 .B -s
 Use SSH instead of HTTP to download one or more matching profiles.  If more
