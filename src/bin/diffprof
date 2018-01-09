@@ -29,6 +29,7 @@ import re
 from time import sleep
 from cStringIO import StringIO
 import gzip
+from copy import copy
 
 try:
     import ms.version
@@ -172,7 +173,7 @@ def rifle_worker(filelist):
             # has its own GIL)
             #
             if transcmd[0] == TRIFLE: cmd = [RIFLE]
-            else: cmd = transcmd
+            else: cmd = copy(transcmd)
 
             cmd += transopt + [infile]
 
