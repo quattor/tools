@@ -115,9 +115,9 @@ else
 
         BEGIN { r=1 }
         /^  Primary Name:/ { row[1]=$0 }
-        /^  Interface: / { row[++r]=$2; provides=0 }
-        /^    Provides: / && !provides {
-            provides=1; gsub("[][]", ""); row[r]=row[r] " " $2 " " $3
+        /^  Interface: / { iface=$2 }
+        /^    Provides: / {
+            gsub("[][]", ""); row[++r]=iface " " $2 " " $3
         }
 
         END {
