@@ -1,9 +1,9 @@
-.TH diffprof "1" "15 August 2016" "User Commands"
+.TH diffprof "1" "30 November 2017" "User Commands"
 .SH NAME
 diffprof \- Compare multiple Quattor profiles
 .SH SYNOPSIS
 .B diffprof
-[\fB-aDefGgIiPrx\fR]
+[\fB-aDefGgIikPrx\fR]
 [\fB-d\fR \fIre\fR]
 [\fB-o\fR \fIoutput\fR]
 [\fB-p\fR \fIworkers\fR] \\
@@ -79,9 +79,20 @@ have been added or removed from a list.  See
 .TP
 .B -i
 Create intermediate files in-place when translating (\fB-x\fR) and do
-not delete these files.  If they exist already when this tool is used
+not delete these files.  If they exist already when this option is used
 and they are newer than the corresponding profile they will
 not be re-generated.
+.TP
+.B -k
+Colourise by sending the output to
+.BR ckey .
+By default, the colour for keys and values will be left for
+.B ckey
+to decide, and lines with @@ will be coloured magenta.  To vary
+these colours, see
+.BR "ENVIRONMENT VARIABLES" .
+See also
+.BR ckey (1).
 .TP
 .BI -o " output"
 Send output to given file, instead of to stdout.
@@ -128,7 +139,25 @@ files via the
 .B -x
 option, where 1 is fastest with least compression, 9 is slowest with best
 compression and 0 is no compression.  Default is 1.
+.SH "ENVIRONMENT VARIABLES
+With the
+.B -k
+option the output is sent through to
+.BR ckey .
+The default colours may be overridden by the following environment variables:
+.RS 4
+.TP 10
+.B DIFFPROF_COL1
+for keys
+.TP
+.B DIFFPROF_COL2
+for values
+.TP
+.B DIFFPROF_COL3
+for regex matches (lines with @@).
+.RE
 .SH "SEE ALSO"
+.BR ckey (1),
 .BR diffuniq (1),
 .BR prdiff (1),
 .BR razor (1),

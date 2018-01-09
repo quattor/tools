@@ -25,11 +25,13 @@ import shutil
 from multiprocessing import cpu_count, Pool, Value, Lock
 import math
 import subprocess
+from subprocess import Popen, PIPE
 import re
 from time import sleep
 from cStringIO import StringIO
 import gzip
 from copy import copy
+import signal
 
 try:
     import ms.version
@@ -56,6 +58,7 @@ sys.path.append(CALLDIR)
 import rifle
 import razor
 
+CKEY = CALLDIR + "/ckey"
 RIFLE = CALLDIR + '/rifle';
 RAZOR = CALLDIR + '/razor';
 GIT_DIFFUNIQ = CALLDIR + '/git-diffuniq';
@@ -70,7 +73,7 @@ def syntax():
     """ Displays command syntax. """
 
     print """\
-Syntax: %s [-DaefGgIiPrx] [-d <re>] [-o <output>] [-p <workers>] \\
+Syntax: %s [-DaefGgIikPrx] [-d <re>] [-o <output>] [-p <workers>] \\
                  [-U <lines>] [-z <compresslevel>] <dir1> <dir2>
         %s -h\
 """ % (CALL, CALL)
@@ -100,6 +103,7 @@ directories should each contain the same number of profiles with the same names.
           not delete these files.  If they exist already when this tool is used
           and they are newer than the corresponding profile they will
           not be re-generated unless the -f option has been used as well.
+    -k    colourise by sending the output to ckey.
     -o <output>
           send output to given file, instead of to stdout.
     -P    list personalities changed (only works with -a output).
@@ -430,7 +434,7 @@ def main():
     # Parse command-line arguments
     #
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "aDd:efGghIio:Pp:rU:xz:")
+        opts, args = getopt.getopt(sys.argv[1:], "aDd:efGghIiko:Pp:rU:xz:")
     except getopt.GetoptError as err:
         print "%s: %s" % (CALL, str(err))
         return 1
@@ -442,6 +446,7 @@ def main():
     trifleopt = []
     trans_inplace = False
     force = False
+    ckey = False
     get_persona = True  # always fetch this data
     list_persona = False
     progress_bar = True
@@ -468,6 +473,7 @@ def main():
             return 1
         elif o == "-I": transopt.append(o)
         elif o == "-i": trans_inplace = True
+        elif o == "-k": ckey = True
         elif o == "-o": outfile = open(a, "w")
         elif o == "-P": list_persona = True
         elif o == "-p": numworkers = int(a)
@@ -490,6 +496,33 @@ def main():
         return 1
 
     if debug: progress_bar = False
+
+    if ckey:
+        #
+        # Colour preferences will be sent to ckey in the environment
+        #
+        if "DIFFPROF_COL1" in os.environ:
+            os.environ["CKEY_COL1"] = os.environ["DIFFPROF_COL1"]
+        if "DIFFPROF_COL2" in os.environ:
+            os.environ["CKEY_COL2"] = os.environ["DIFFPROF_COL2"]
+        if "DIFFPROF_COL3" in os.environ:
+            os.environ["CKEY_COL3"] = os.environ["DIFFPROF_COL3"]
+        else:
+            os.environ["CKEY_COL3"] = "magenta"
+
+        #
+        # Ignore SIGPIPE
+        #
+        signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+
+        #
+        # Pipe output through ckey
+        #
+        pipe = Popen([CKEY, "-r", "@@ .*$"], stdin=PIPE, stdout=outfile)
+        realout = pipe.stdin
+    else:
+        pipe = None
+        realout = outfile
 
     if len(diffopt) == 0:
         if len(transcmd) == 0:
@@ -524,12 +557,13 @@ def main():
         if len(transcmd) > 0:
             (dir1, dir2) = do_translations(numworkers, dir1, dir2)
 
-        return run_diff(numworkers, outfile, dir1, dir2)
+        return run_diff(numworkers, realout, dir1, dir2)
 
     finally:
         if tmpdir is not None:
             shutil.rmtree(tmpdir)
 
+        if pipe: pipe.communicate('')
         if outfile != sys.stdout: outfile.close()
 
 if __name__ == "__main__":
