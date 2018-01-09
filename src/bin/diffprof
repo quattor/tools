@@ -315,6 +315,8 @@ def do_translations(numworkers, dir1, dir2):
             exit(2)
 
         pool.close()
+        pool.join()  # wait for all workers to exit
+        async.get()  # get to see any exception raised by a worker
 
         if not async.successful():
             raise RuntimeError("Some files failed to be processed by %s" %
