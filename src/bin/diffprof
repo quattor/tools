@@ -138,13 +138,16 @@ def rifle_worker(filelist):
     for f in filelist:
         (infile, outfile) = f
 
+        outdir = os.path.dirname(outfile)
+        if not os.path.exists(outdir):
+            os.makedirs(outdir, 0700)
+
         if transcmd[0] == TRIFLE and \
                 (infile[-5:] == ".json" or infile[-8:] == ".json.gz"):
             #
             # Using trifle for speed
             #
-            cmd = transcmd + transopt + trifleopt + \
-                        ["-d", os.path.dirname(outfile), infile]
+            cmd = transcmd + transopt + trifleopt + ["-d", outdir, infile]
 
             if debug:
                 with stderr_lock:
