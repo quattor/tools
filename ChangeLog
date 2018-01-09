@@ -1,3 +1,31 @@
+2018-01-09  Mark R. Bannister
+
+	* trifle: trifle not handling incomplete escape sequences correctly.
+
+	* aqnet: aqnet not handling multiple IPs on single interface.
+
+	* getprof: getprof should check AQHOST environment variable.
+
+	* diffprof: diffprof -rx kept appending to command-line arguments.
+	* diffprof: diffprof -x must create output directory if missing.
+	* diffprof: diffprof needs to wait for workers and reap exceptions.
+	* diffprof: Add -k option to diffprof.
+	* diffprof: diffprof -I, -U and -x would break if given multiple times.
+
+	* aqc: Add aqc command.
+
+2017-07-11  Mark R. Bannister
+
+	* prdiff: prdiff -n -- -u <from-num> was failing.
+
+	* getprof: getprof now supports downloading multiple profiles.
+
+	* rifle: rifle man page missing -p option from synopsis.
+
+2017-04-07  Mark R. Bannister
+
+	* aqs: Fix aqs after resource changes to cluster output.
+
 2016-11-16  Mark R. Bannister
 
 	* configure: Integrate with Autoconf/Automake.

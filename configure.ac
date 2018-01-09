@@ -1,5 +1,5 @@
 AC_PREREQ(2.61)
-AC_INIT([aquilon-tools], [1.30.1])
+AC_INIT([aquilon-tools], [1.46])
 AC_CONFIG_AUX_DIR([config])
 AC_CONFIG_HEADERS([config.h])
 AC_CANONICAL_TARGET
