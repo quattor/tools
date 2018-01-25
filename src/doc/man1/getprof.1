@@ -1,4 +1,4 @@
-.TH getprof "1" "28 April 2017" "User Commands"
+.TH getprof "1" "4 September 2017" "User Commands"
 .SH NAME
 getprof \- Download host or cluster profile
 .SH SYNOPSIS
@@ -23,7 +23,9 @@ from
 The DNS domain name may be omitted, in which case it will be added from
 .BR /etc/resolv.conf .
 
-Use the -d option if downloading more than one profile at a time.
+Use the
+.B -d
+option if downloading more than one profile at a time.
 .SH OPTIONS
 The following options are supported:
 .RS 4
@@ -55,6 +57,17 @@ than one profile is matched, then all matching profiles will be sent
 in succession to stdout.  The number of matching profiles will be reported
 to stderr.
 .RE
+.SH "ENVIRONMENT VARIABLES"
+The
+.B AQD_HOST
+environment variable overrides the default hostname of the Aquilon broker from which to
+download host profiles.
+
+For compatibility reasons, the
+.B AQHOST
+environment variable may also be used.  If both environment variables are specified, then
+.B AQD_HOST
+takes precedence.
 .SH "SEE ALSO"
 .BR aqs (1),
 .BR rifle (1),

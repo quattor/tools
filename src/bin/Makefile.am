@@ -1,4 +1,4 @@
-dist_bin_SCRIPTS = aqnet aqs ckey diffprof getprof git-diffuniq \
+dist_bin_SCRIPTS = aqnet aqc aqs ckey diffprof getprof git-diffuniq \
 		   prdiff razor.py rifle.py
 
 bin_SCRIPTS = diffuniq razor rifle trifle xmlnm

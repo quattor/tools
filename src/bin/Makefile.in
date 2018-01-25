@@ -188,7 +188,7 @@ target_vendor = @target_vendor@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
-dist_bin_SCRIPTS = aqnet aqs ckey diffprof getprof git-diffuniq \
+dist_bin_SCRIPTS = aqnet aqc aqs ckey diffprof getprof git-diffuniq \
 		   prdiff razor.py rifle.py
 
 bin_SCRIPTS = diffuniq razor rifle trifle xmlnm

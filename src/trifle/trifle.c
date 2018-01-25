@@ -150,7 +150,13 @@ static char *str_unescape(const char *s, char *buf, int buflen)
 
     buflen-=3;  /* space for surrounding { } if we unescape anything, and \0 */
 
-    for (p=s, q=buf+1, len=0; *p!='\0' && len<buflen; p++)
+    /*
+     * Loop through string, note that we do one loop iteration even when
+     * the terminating NUL character is found so that we have the
+     * opportunity to output an incomplete escape sequence that we
+     * might have been in the middle of processing
+     */
+    for (p=s, q=buf+1, len=0; len<buflen; p++)
     {
         if (*p=='_') score=1;
         else if (score)
@@ -189,16 +195,20 @@ static char *str_unescape(const char *s, char *buf, int buflen)
                 if (len+score+1>=buflen) goto unescape_overflow;
                 *(q++)='_';
                 if (score==2) *(q++)=*(p-1);
-                *(q++)=*p;
-                len+=score+1;
+                if (*p!='\0') *(q++)=*p;
+                len+=score+1-(*p=='\0');
                 score=0;
             }
         }
         else
         {
-            *(q++)=*p;
-            len++;
+            if (*p!='\0')
+            {
+                *(q++)=*p;
+                len++;
+            }
         }
+        if (*p=='\0') break;
     }
     if (*p!='\0') goto unescape_overflow;
     len++;

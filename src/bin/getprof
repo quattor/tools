@@ -17,7 +17,7 @@
 #
 ##############################################################################
 CALL=$(basename $0)
-AQD_HOST=${AQD_HOST:-nyaqd1}
+AQD_HOST=${AQD_HOST:-$AQHOST}
 AWK=/bin/nawk
 [ -x /bin/gawk ] && AWK=/bin/gawk
 AQ=aq
@@ -119,7 +119,7 @@ function web_download
                 [ "${object%$domain}" != "$object" ] && domain=
             fi
 
-            [ $DEBUG -eq 1 ] && echo $CALL: trying $object$domain ... >&2
+            [ $DEBUG -eq 1 ] && echo $CALL: trying to get $object$domain from $AQD_HOST ... >&2
             web_get $object$domain $this_cluster && return
         done
     else

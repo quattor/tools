@@ -7,6 +7,10 @@ working with the Aquilon Configuration Management Database.
 
 Shortcut for `aq show network device` with a tabular output format.
 
+## aqc ##
+
+Run any aq command adding colo[u]r to output.
+
 ## aqs ##
 
 Shortcut for `aq show host` or `aq show cluster` with colo[u]ri[sz]ing.
