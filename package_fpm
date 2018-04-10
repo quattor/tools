@@ -1,0 +1,29 @@
+#!/bin/sh
+
+eval "$(grep "^PACKAGE_.\+='.\+'" configure)"
+
+install_dir="$(mktemp -d || exit 1)"
+
+./configure ZLIB_DIR=/usr/lib64/ ZLIB_INC=/usr/include/ --prefix="$install_dir" || exit 1
+
+make || exit 1
+
+fpm \
+    --force \
+    --output-type rpm \
+    --input-type dir \
+    --chdir "$install_dir" \
+    --prefix /usr \
+    --name "$PACKAGE_NAME" \
+    --version "$PACKAGE_VERSION" \
+    --url "https://github.com/quattor/aquilon-tools" \
+    --license "ASL 2.0" \
+    --maintainer Quattor \
+    --description "A collection of CLI tools for system administrators working with the Aquilon Configuration Management Database" \
+    --depends python2-tqdm \
+    --depends python-termcolor \
+    --depends bash \
+    --depends ksh \
+    || exit 1
+
+rm -rf "$install_dir"
