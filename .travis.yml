@@ -1,0 +1,11 @@
+language: python
+
+script:
+  - ./.travis/script
+
+sudo: false
+
+addons:
+  apt:
+    packages:
+    - ksh
