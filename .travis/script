@@ -1,0 +1,13 @@
+#!/bin/bash
+
+install_dir="$(mktemp -d || exit 1)"
+
+./configure ZLIB_DIR=/usr/lib64/ ZLIB_INC=/usr/include/ --prefix="$install_dir" || exit 1
+
+make
+
+make check
+
+make install
+
+make installcheck
