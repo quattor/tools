@@ -1,3 +1,7 @@
+2018-05-23  Mark R. Bannister
+
+	* rifle: rifle was not handling exceptions when parsing XML documents.
+
 2018-01-09  Mark R. Bannister
 
 	* trifle: trifle not handling incomplete escape sequences correctly.
