@@ -409,7 +409,11 @@ def main(args=sys.argv, outfile=sys.stdout, xdup=None, xout=None):
 
         from lxml import etree
 
-        tree = etree.parse(fname)
+        try:
+            tree = etree.parse(fname)
+        except Exception as err:
+            print "%s: %s: %s" % (CALL, str(err), fname)
+            return 1
 
         if len(args) == 0:
             root = tree.getroot()
