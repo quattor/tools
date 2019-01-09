@@ -19,7 +19,7 @@ from setuptools import setup
 
 __author__ = 'Jerome Pansanel'
 __email__ = 'jerome.pansanel@iphc.cnrs.fr'
-__version__ = '0.2'
+__version__ = '0.3'
 
 setup(
     name='update-vo-config',
@@ -43,5 +43,5 @@ setup(
     install_requires=[
         'setuptools',
         ],
-    scripts=['update_vo_config'],
+    scripts=['update-vo-config'],
 )
