@@ -428,13 +428,20 @@ def parse_vo_card(vo_card):
         hostname = server.find('hostname')
         if hostname is not None:
             hostname = hostname.text.strip()
+            if 'https:' in hostname[0:6]:
+                sys.stderr.write(
+                    "The VOMS server defined for the %s " % voconfig['name'] +
+                    "VO is not a regular VOMS server\n"
+                )
+                hostname = None
         voms_endpoint.hostname = hostname
         cert = server.find('X509Cert/X509PublicKey')
         if cert is not None:
             cert = cert.text.strip()
         voms_endpoint.cert = cert
         voms_endpoint.set_is_admin(server.get('IsVomsAdminServer'))
-        voms_endpoints.append(voms_endpoint)
+        if hostname is not None:
+            voms_endpoints.append(voms_endpoint)
     voconfig['voms_endpoints'] = voms_endpoints
 
     return voconfig
