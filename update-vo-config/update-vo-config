@@ -20,18 +20,31 @@ from operator import itemgetter
 import os
 import re
 import sys
+import urllib2
 import xml.etree.ElementTree as ET
 from OpenSSL import crypto
-import urllib2
 
-SW_MANAGER_ROLES = ['/Role=lcgadmin', '/admin', '/Role=swadmin',
-                    '/Role=sgmadmin', '/Role=sgm', '/Role=SoftwareManager',
-                    '/Role=VO-Software-Manager', '/Role=SW-Admin']
+SW_MANAGER_ROLES = [
+    '/Role=lcgadmin',
+    '/admin',
+    '/Role=swadmin',
+    '/Role=sgmadmin',
+    '/Role=sgm',
+    '/Role=SoftwareManager',
+    '/Role=VO-Software-Manager',
+    '/Role=SW-Admin'
+]
 
-PRODUCTION_ROLES = ['/Role=production', '/Role=Production', '/Role=prod',
-                    '/Role=ProductionManager']
+PRODUCTION_ROLES = [
+    '/Role=production',
+    '/Role=Production',
+    '/Role=prod',
+    '/Role=ProductionManager'
+]
 
-PILOTE_ROLES = ['/Role=pilot']
+PILOTE_ROLES = [
+    '/Role=pilot'
+]
 
 FQAN_TYPE_MAPPING = {
     'pilot': 'pilot',
