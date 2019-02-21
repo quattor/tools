@@ -28,7 +28,7 @@ directories:
 
 It creates these directories if they are missing and filled them with the
 template describing the VOMS servers and VOs configuration obtained from
-the `Operation Portal https://operations-portal.egi.eu/>`_.
+the `Operation Portal <https://operations-portal.egi.eu/>`_.
 
 A single argument is mandatory, *basedir*. To run the tool, execute:
 
