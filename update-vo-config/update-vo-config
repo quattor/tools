@@ -52,6 +52,27 @@ FQAN_TYPE_MAPPING = {
     'SW manager': 's'
 }
 
+VOMS_ENDPOINT_CERT_TEMPLATE = '''    '%s', dict(
+        'subject', '%s',
+        'issuer', '%s',
+    ),
+'''
+
+VOMS_ENDPOINT_TEMPLATE = '''    dict(
+        'name', '%s',
+        'host', '%s',
+        'port', %s,
+        'adminport', %s,
+'''
+
+VOMS_MAPPING_TEMPLATE = '''    dict(
+        'description', '%s',
+        'fqan', '%s',
+        'suffix', '%s',
+        'suffix2', '%s',
+    ),
+'''
+
 VO_CARD_URI = "http://operations-portal.egi.eu/xml/voIDCard/public/all/true"
 CERT_DIR = 'vo/certs'
 PARAMS_DIR = 'vo/params'
@@ -186,6 +207,17 @@ def get_account_suffix(vo_name, fqan):
         return to_base26(java_string_hashcode(relative_fqan))
 
 
+def get_dn_as_string(dn_list):
+    """Return a X509Name object as a string
+    """
+    dn_string = ""
+    if dn_list.__class__.__name__ != 'X509Name':
+        return None
+    for (field, value) in dn_list.get_components():
+        dn_string = dn_string + "/" + field + "=" + value
+    return dn_string
+
+
 def write_cert_info(voms_endpoint):
     """Writes subject and issuer of VOMS server valid certificates as a
        dict element
@@ -195,14 +227,13 @@ def write_cert_info(voms_endpoint):
     issuer = ""
     if voms_endpoint.cert:
         cert = crypto.load_certificate(crypto.FILETYPE_PEM, voms_endpoint.cert)
-        for (field, value) in cert.get_subject().get_components():
-            subject = subject + "/" + field + "=" + value
-        for (field, value) in cert.get_issuer().get_components():
-            issuer = issuer + "/" + field + "=" + value
-        content = format("    '%s', dict(\n" % voms_endpoint.hostname)
-        content += format("        'subject', '%s',\n" % subject)
-        content += format("        'issuer', '%s',\n" % issuer)
-        content += format("    ),\n")
+        subject = get_dn_as_string(cert.get_subject())
+        issuer = get_dn_as_string(cert.get_issuer())
+        content = format(
+            VOMS_ENDPOINT_CERT_TEMPLATE %
+            (voms_endpoint.hostname, subject, issuer)
+        )
+
     return content
 
 
@@ -230,11 +261,12 @@ def write_vo_template(vo_details, basedir, namespaces):
     elif len(vo_details['voms_endpoints']) == 1:
         force_voms_admin = True
     for endpoint in vo_details['voms_endpoints']:
-        template.write("    dict(\n")
-        template.write("        'name', '%s',\n" % endpoint.hostname)
-        template.write("        'host', '%s',\n" % endpoint.hostname)
-        template.write("        'port', %s,\n" % endpoint.vomses_port)
-        template.write("        'adminport', %s,\n" % endpoint.https_port)
+        template.write(
+            VOMS_ENDPOINT_TEMPLATE % (
+                endpoint.hostname, endpoint.hostname, endpoint.vomses_port,
+                endpoint.https_port
+            )
+        )
         if not endpoint.is_admin:
             if not force_voms_admin:
                 template.write("        'type', list('voms-only'),\n")
@@ -253,12 +285,10 @@ def write_vo_template(vo_details, basedir, namespaces):
         suffix = get_legacy_suffix(vo_details['id'], mapping, legacy_suffix)
         legacy_suffix.append(suffix)
         suffix2 = get_account_suffix(vo_details['name'], mapping)
-        template.write("    dict(\n")
-        template.write("        'description', '%s',\n" % mapping['desc'])
-        template.write("        'fqan', '%s',\n" % mapping['expr'])
-        template.write("        'suffix', '%s',\n" % suffix)
-        template.write("        'suffix2', '%s',\n" % suffix2)
-        template.write("    ),\n")
+        template.write(
+            VOMS_MAPPING_TEMPLATE %
+            (mapping['desc'], mapping['expr'], suffix, suffix2)
+        )
 
     template.write(");\n\n")
 
