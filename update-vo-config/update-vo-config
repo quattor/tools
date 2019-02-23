@@ -431,6 +431,56 @@ def write_dn_list(vo_details, base_dir, namespaces):
     template.close()
 
 
+def parse_fqan_data(vo_name, fqan):
+    """Parse FQAN data and return a dict describing the fqan
+    """
+    data = {}
+    expr = get_clean_fqan(fqan.find('FqanExpr').text, vo_name)
+    if expr:
+        data['expr'] = expr.strip()
+        fqan_type = fqan.get('GroupType')
+        if fqan_type in FQAN_TYPE_MAPPING.keys():
+            data['type'] = fqan_type
+        else:
+            data['type'] = get_fqan_type(expr, vo_name)
+
+        if not data['type']:
+            desc = fqan.find('Description').text
+        else:
+            desc = data['type']
+        if desc:
+            data['desc'] = desc.strip()
+        else:
+            data['desc'] = ''
+
+    return data
+
+
+def parse_voms_server_data(vo_name, voms_server):
+    """ Parse VOMS servers and return a VOMSEndpoint object
+    """
+    voms_endpoint = VOMSEndpoint()
+    voms_endpoint.https_port = voms_server.get('HttpsPort')
+    voms_endpoint.vomses_port = voms_server.get('VomsesPort')
+    hostname = voms_server.find('hostname')
+    if hostname is not None:
+        hostname = hostname.text.strip()
+        if 'https:' in hostname[0:6]:
+            sys.stderr.write(
+                "The VOMS server defined for the %s " % vo_name +
+                "VO is not a regular VOMS server\n"
+            )
+            hostname = None
+    voms_endpoint.hostname = hostname
+    cert = voms_server.find('X509Cert/X509PublicKey')
+    if cert is not None:
+        cert = cert.text.strip()
+    voms_endpoint.cert = cert
+    voms_endpoint.set_is_admin(voms_server.get('IsVomsAdminServer'))
+
+    return voms_endpoint
+
+
 def parse_vo_card(vo_card):
     """Parse a VO card and return the data
     """
@@ -442,49 +492,14 @@ def parse_vo_card(vo_card):
         voconfig['id'] = int(vo_card.get(ID_ATTR)) * 10 + 40
     fqans = []
     for fqan in vo_card.findall('gLiteConf/FQANs/FQAN'):
-        # Parse FQAN
-        data = {}
-        expr = get_clean_fqan(fqan.find('FqanExpr').text, voconfig['name'])
-        if expr:
-            data['expr'] = expr.strip()
-            fqan_type = fqan.get('GroupType')
-            if fqan_type in FQAN_TYPE_MAPPING.keys():
-                data['type'] = fqan_type
-            else:
-                data['type'] = get_fqan_type(expr, voconfig['name'])
-
-            if not data['type']:
-                desc = fqan.find('Description').text
-            else:
-                desc = data['type']
-            if desc:
-                data['desc'] = desc.strip()
-            else:
-                data['desc'] = ''
-            fqans.append(data)
+        fqan_data = parse_fqan_data(voconfig['name'], fqan)
+        if fqan_data:
+            fqans.append(fqan_data)
     voconfig['voms_mapping'] = fqans
     voms_endpoints = []
     for server in vo_card.findall('gLiteConf/VOMSServers/VOMS_Server'):
-        # Parse VOMS servers
-        voms_endpoint = VOMSEndpoint()
-        voms_endpoint.https_port = server.get('HttpsPort')
-        voms_endpoint.vomses_port = server.get('VomsesPort')
-        hostname = server.find('hostname')
-        if hostname is not None:
-            hostname = hostname.text.strip()
-            if 'https:' in hostname[0:6]:
-                sys.stderr.write(
-                    "The VOMS server defined for the %s " % voconfig['name'] +
-                    "VO is not a regular VOMS server\n"
-                )
-                hostname = None
-        voms_endpoint.hostname = hostname
-        cert = server.find('X509Cert/X509PublicKey')
-        if cert is not None:
-            cert = cert.text.strip()
-        voms_endpoint.cert = cert
-        voms_endpoint.set_is_admin(server.get('IsVomsAdminServer'))
-        if hostname is not None:
+        voms_endpoint = parse_voms_server_data(voconfig['name'], server)
+        if voms_endpoint.hostname is not None:
             voms_endpoints.append(voms_endpoint)
     voconfig['voms_endpoints'] = voms_endpoints
 
