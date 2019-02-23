@@ -394,9 +394,9 @@ def write_vo_list(vo_details, basedir, namespaces):
     """Write template containing a list of all defined VOs
     """
     vo_list_ns = os.path.join(namespaces['params_dir'], 'allvos')
-    vo_list_template = os.path.join(basedir, vo_list_ns + TPL_SUFFIX) 
-    sys.stdout.write("Writing the list of defined VOs (" + vo_list_template +
-                     ")\n")
+    vo_list_template = os.path.join(basedir, vo_list_ns + TPL_SUFFIX)
+    sys.stdout.write("Writing the list of defined VOs (%s)\n" %
+                     vo_list_template)
     template = open(vo_list_template, 'w')
     template.write("unique template %s;\n\n" % vo_list_ns)
     template.write("variable ALLVOS ?= list(\n")
