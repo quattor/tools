@@ -81,6 +81,7 @@ SITE_PARAMS_DIR = 'vo/site'
 ROOT_ELEM = "VoDump"
 ID_CARD_ELEM = "IDCard"
 ID_ATTR = "CIC_ID"
+TPL_SUFFIX = ".pan"
 
 DESCRIPTION = "Configure VO-related PAN templates"
 VERSION = "0.1"
@@ -240,8 +241,8 @@ def write_cert_info(voms_endpoint):
 def write_vo_template(vo_details, basedir, namespaces):
     """Write VO template
     """
-    vo_params_ns = namespaces['params_dir'] + os.path.sep + vo_details['name']
-    vo_params_tpl = basedir + os.path.sep + vo_params_ns + ".pan"
+    vo_params_ns = os.path.join(namespaces['params_dir'], vo_details['name'])
+    vo_params_tpl = os.path.join(basedir, vo_params_ns + TPL_SUFFIX)
     force_voms_admin = False
 
     sys.stdout.write("Writing template for VO " + vo_details['name'] +
@@ -310,8 +311,8 @@ def update_voms_servers(vo_details, basedir, namespaces, debug=False):
                 if server.hostname not in voms_servers:
                     voms_servers[server.hostname] = server.cert
     for (hostname, cert) in voms_servers.items():
-        server_cert_ns = namespaces['cert_dir'] + os.path.sep + hostname
-        server_cert_tpl = basedir + os.path.sep + server_cert_ns + ".pan"
+        server_cert_ns = os.path.join(namespaces['cert_dir'], hostname)
+        server_cert_tpl = os.path.join(basedir, server_cert_ns + TPL_SUFFIX)
         if cert is None:
             sys.stdout.write("No certicate defined for %s " % hostname +
                              "voms server.\n")
@@ -392,8 +393,8 @@ def update_voms_servers(vo_details, basedir, namespaces, debug=False):
 def write_vo_list(vo_details, basedir, namespaces):
     """Write template containing a list of all defined VOs
     """
-    vo_list_ns = namespaces['params_dir'] + os.path.sep + 'allvos'
-    vo_list_template = basedir + os.path.sep + vo_list_ns + ".pan"
+    vo_list_ns = os.path.join(namespaces['params_dir'], 'allvos')
+    vo_list_template = os.path.join(basedir, vo_list_ns + TPL_SUFFIX) 
     sys.stdout.write("Writing the list of defined VOs (" + vo_list_template +
                      ")\n")
     template = open(vo_list_template, 'w')
@@ -409,8 +410,8 @@ def write_dn_list(vo_details, base_dir, namespaces):
     """Write template containing subject / issuer of all valid VOMS server
     certificates
     """
-    dn_list_ns = namespaces['cert_dir'] + os.path.sep + "voms_dn_list"
-    dn_list_template = base_dir + os.path.sep + dn_list_ns + ".pan"
+    dn_list_ns = os.path.join(namespaces['cert_dir'], "voms_dn_list")
+    dn_list_template = os.path.join(base_dir, dn_list_ns + TPL_SUFFIX)
     voms_servers = {}
     sys.stdout.write("Writing the list of defined VOMSs (" +
                      dn_list_template + ")\n")
@@ -536,7 +537,7 @@ def update_vo_config():
 
     # Create the directory tree if necessary
     for dir_path in namespaces.values():
-        dirname = basedir + os.path.sep + dir_path
+        dirname = os.path.join(basedir, dir_path)
         if not os.path.isdir(dirname):
             os.makedirs(dirname)
     for vo_data in vo_card_data:
