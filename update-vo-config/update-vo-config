@@ -143,6 +143,10 @@ def get_fqan_type(fqan, vo_name):
 
 def java_string_hashcode(string):
     """Python implementation of the Java String.hashCode function
+    The code of this function is taken from:
+    http://ftp.pimentech.net/libcommonPython/src/python/libcommon/javastringhashcode2.py
+    and has the following copyright:
+    Copyright 2010 PimenTech SARL
     """
     hashcode = 0
     for char in string:
