@@ -322,7 +322,7 @@ def update_voms_servers(vo_details, basedir, namespaces, debug=False):
 
             except crypto.Error as e:
                 sys.stderr.write("ERROR Certificate for %s " % hostname +
-                                 "could not be loaded: %s\n" % str(e))
+                                 "could not be loaded: %s\n" % e)
         old_x509_cert = None
         if x509_cert is not None and os.path.isfile(server_cert_tpl):
             if debug:
@@ -351,7 +351,7 @@ def update_voms_servers(vo_details, basedir, namespaces, debug=False):
                 except crypto.Error as e:
                     sys.stderr.write("ERROR Existing certificate for " +
                                      "%s could not be " % hostname +
-                                     "loaded: %s\n" % str(e))
+                                     "loaded: %s\n" % e)
                     old_x509_cert = None
                 if old_x509_cert is not None:
                     if old_x509_cert.has_expired():
