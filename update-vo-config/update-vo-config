@@ -94,15 +94,10 @@ class VOMSEndpoint(object):
         self.hostname = None
         self.https_port = 8443
         self.vomses_port = 0
-        self.old_cert_retrieved = False
         self.cert = None
         self.old_cert = None
         self.is_admin = True
 
-    def get_cert(self):
-        """Check the certificate
-        """
-        pass
 
     def set_is_admin(self, is_voms_admin_server):
         """Set the value of the is_admin attribute
@@ -493,6 +488,9 @@ def parse_vo_card(vo_card):
     if ID_ATTR == 'CIC_ID':
         voconfig['id'] = int(vo_card.get(ID_ATTR))
     else:
+        # This function permit to ensure that the base_uid start at 50000
+        # (permit the use of local user) and to grant up to 10000 accounts per
+        # VO.
         voconfig['id'] = int(vo_card.get(ID_ATTR)) * 10 + 40
     fqans = []
     for fqan in vo_card.findall('gLiteConf/FQANs/FQAN'):
