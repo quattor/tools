@@ -298,6 +298,48 @@ def write_vo_template(vo_details, basedir, namespaces):
     template.close()
 
 
+def extract_old_cert(server_cert_tpl=None, debug=False):
+    """Extract the old certificate from the server certificate template
+    """
+    old_x509_cert = None
+    if os.path.isfile(server_cert_tpl):
+        if debug:
+            sys.stdout.write("DEBUG Retrieving old VOMS server certificate"
+                             " from file: %s\n" % server_cert_tpl)
+        template = open(server_cert_tpl, 'r')
+        old_cert = ""
+        in_cert_part = False
+        cert_start_reg = re.compile("^'cert' \?=")
+        cert_end_reg = re.compile("^EOF")
+        for line in template.readlines():
+            if in_cert_part:
+                if re.search(cert_end_reg, line):
+                    in_cert_part = False
+                    break
+                else:
+                    old_cert += line
+            elif re.search(cert_start_reg, line):
+                in_cert_part = True
+        template.close()
+        if old_cert:
+            try:
+                old_x509_cert = crypto.load_certificate(
+                    crypto.FILETYPE_PEM, old_cert
+                )
+            except crypto.Error as e:
+                sys.stderr.write("ERROR Existing certificate " +
+                                 "(%s) could not be " % server_cert_tpl +
+                                 "loaded: %s\n" % e)
+                old_x509_cert = None
+            if old_x509_cert is not None:
+                if old_x509_cert.has_expired():
+                    sys.stdout.write("Existing certificate" +
+                                     "(%s) is no " % server_cert_tpl +
+                                     "longer valid: ignoring it.\n")
+                    old_x509_cert = None
+    return old_x509_cert
+
+
 def update_voms_servers(vo_details, basedir, namespaces, debug=False):
     """write template containing the voms certficate
     """
@@ -323,49 +365,15 @@ def update_voms_servers(vo_details, basedir, namespaces, debug=False):
             except crypto.Error as e:
                 sys.stderr.write("ERROR Certificate for %s " % hostname +
                                  "could not be loaded: %s\n" % e)
-        old_x509_cert = None
-        if x509_cert is not None and os.path.isfile(server_cert_tpl):
-            if debug:
-                sys.stdout.write("DEBUG Retrieving VOMS server"
-                                 " %s existing certificate\n" % hostname)
-            template = open(server_cert_tpl, 'r')
-            old_cert = ""
-            in_cert_part = False
-            cert_start_reg = re.compile("^'cert' \?=")
-            cert_end_reg = re.compile("^EOF")
-            for line in template.readlines():
-                if in_cert_part:
-                    if re.search(cert_end_reg, line):
-                        in_cert_part = False
-                        break
-                    else:
-                        old_cert += line
-                elif re.search(cert_start_reg, line):
-                    in_cert_part = True
-            template.close()
-            if old_cert:
-                try:
-                    old_x509_cert = crypto.load_certificate(
-                        crypto.FILETYPE_PEM, old_cert
-                    )
-                except crypto.Error as e:
-                    sys.stderr.write("ERROR Existing certificate for " +
-                                     "%s could not be " % hostname +
-                                     "loaded: %s\n" % e)
-                    old_x509_cert = None
-                if old_x509_cert is not None:
-                    if old_x509_cert.has_expired():
-                        sys.stdout.write("Existing certificate" +
-                                         "(%s) is no " % server_cert_tpl +
-                                         "longer valid: ignoring it.\n")
-                        old_x509_cert = None
-                    elif (old_x509_cert.digest('SHA256')
-                          == x509_cert.digest('SHA256')):
-                        sys.stdout.write("Existing certificate " +
-                                         "(%s) is the " % server_cert_tpl +
-                                         "same than the retrieved " +
-                                         "certificate: ignoring it.\n")
-                        old_x509_cert = None
+        if x509_cert:
+            old_x509_cert = extract_old_cert(server_cert_tpl)
+            if (old_x509_cert and (old_x509_cert.digest('SHA256') ==
+                                   x509_cert.digest('SHA256'))):
+                sys.stdout.write(
+                    "Existing certificate (%s) is the " % server_cert_tpl +
+                    "same than the retrieved certificate: ignoring it.\n"
+                )
+                old_x509_cert = None
         sys.stdout.write("Updating template for VOMS server " +
                          "%s (%s)\n" % (hostname, server_cert_tpl))
         template = open(server_cert_tpl, 'w')
