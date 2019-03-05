@@ -1,0 +1,576 @@
+#! /usr/bin/env python
+# -*- coding: utf-8 -*-
+
+# Copyright 2018 CNRS and University of Strasbourg
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License. You may obtain
+# a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+import argparse
+from operator import itemgetter
+import os
+import re
+import sys
+import urllib2
+import xml.etree.ElementTree as ET
+from OpenSSL import crypto
+
+SW_MANAGER_ROLES = [
+    '/Role=lcgadmin',
+    '/admin',
+    '/Role=swadmin',
+    '/Role=sgmadmin',
+    '/Role=sgm',
+    '/Role=SoftwareManager',
+    '/Role=VO-Software-Manager',
+    '/Role=SW-Admin'
+]
+
+PRODUCTION_ROLES = [
+    '/Role=production',
+    '/Role=Production',
+    '/Role=prod',
+    '/Role=ProductionManager'
+]
+
+PILOTE_ROLES = [
+    '/Role=pilot'
+]
+
+FQAN_TYPE_MAPPING = {
+    'pilot': 'pilot',
+    'production': 'p',
+    'SW manager': 's'
+}
+
+VOMS_ENDPOINT_CERT_TEMPLATE = '''    '%s', dict(
+        'subject', '%s',
+        'issuer', '%s',
+    ),
+'''
+
+VOMS_ENDPOINT_TEMPLATE = '''    dict(
+        'name', '%s',
+        'host', '%s',
+        'port', %s,
+        'adminport', %s,
+'''
+
+VOMS_MAPPING_TEMPLATE = '''    dict(
+        'description', '%s',
+        'fqan', '%s',
+        'suffix', '%s',
+        'suffix2', '%s',
+    ),
+'''
+
+VO_CARD_URI = "http://operations-portal.egi.eu/xml/voIDCard/public/all/true"
+CERT_DIR = 'vo/certs'
+PARAMS_DIR = 'vo/params'
+SITE_PARAMS_DIR = 'vo/site'
+# The base XML element of the VO Card
+ROOT_ELEM = "VoDump"
+ID_CARD_ELEM = "IDCard"
+ID_ATTR = "CIC_ID"
+TPL_SUFFIX = ".pan"
+
+DESCRIPTION = "Configure VO-related PAN templates"
+VERSION = "0.1"
+
+
+class VOMSEndpoint(object):
+    """A class representing a VOMS server endpoint (used by a specific VO)
+    """
+    def __init__(self):
+        self.hostname = None
+        self.https_port = 8443
+        self.vomses_port = 0
+        self.cert = None
+        self.old_cert = None
+        self.is_admin = True
+
+
+    def set_is_admin(self, is_voms_admin_server):
+        """Set the value of the is_admin attribute
+        """
+        self.is_admin = (is_voms_admin_server == '1')
+
+
+def get_clean_fqan(fqan, vo_name):
+    """Cleanup the fqan
+    """
+    if not fqan:
+        return ""
+    # Remove leading/trailiong spaces if any added by mistake...
+    clean_fqan = fqan.strip()
+    # Remove /Role=NULL if specified in VO ID card
+    clean_fqan = re.sub(re.compile("/Role=NULL$"), "", clean_fqan)
+    # If the relative FQAN corresponds to the VO name without any role,
+    # set it to an empty string. An empty FQAN must not be added to the
+    # FQAN list as it is not a real FQAN.
+    if len(re.sub(re.compile("^/" + vo_name), "", clean_fqan)) == 0:
+        clean_fqan = ""
+    return clean_fqan
+
+
+def get_fqan_type(fqan, vo_name):
+    """ Check if fqan has a predefined role
+    """
+    clean_fqan = re.sub(re.compile("^/" + vo_name), "", fqan)
+    if clean_fqan in SW_MANAGER_ROLES:
+        return "SW manager"
+    elif clean_fqan in PRODUCTION_ROLES:
+        return "production"
+    elif clean_fqan in PILOTE_ROLES:
+        return "pilot"
+    else:
+        return None
+
+
+def java_string_hashcode(string):
+    """Python implementation of the Java String.hashCode function
+    The code of this function is taken from:
+    http://ftp.pimentech.net/libcommonPython/src/python/libcommon/javastringhashcode2.py
+    and has the following copyright:
+    Copyright 2010 PimenTech SARL
+    """
+    hashcode = 0
+    for char in string:
+        hashcode = (31 * hashcode + ord(char)) & 0xFFFFFFFF
+    return ((hashcode + 0x80000000) & 0xFFFFFFFF) - 0x80000000
+
+
+def to_base26(integer):
+    """Base26 digits are normally from 0 to P but the returned string
+    is containing only letters:
+    digits from 0 to 9 are replaced by letters from q to z.
+    The returned string is in lowercase
+    """
+    div = integer & 0xFFFFFFFF
+    base26 = ""
+    while True:
+        (div, mod) = divmod(div, 26)
+        # Replace digits from 0 to 9 by letters from Q to Z
+        if mod < 10:
+            mod = mod + ord('P') + 1
+        else:
+            mod = mod + ord('A') - 10
+        base26 = chr(mod) + base26
+        if div < 1:
+            break
+    return base26.lower()
+
+
+def get_legacy_suffix(vo_id, fqan, account_suffix, debug=False):
+    """Generated suffix is based on base26-like conversion of FQAN length
+       and VO ID. Despite this is a very bad choice for uniqueness, it is
+       impossible to change without breaking backward compatibility of
+       generated accounts. New algorithm is implemented as a distinct method.
+    """
+    if fqan['type'] in FQAN_TYPE_MAPPING:
+        return FQAN_TYPE_MAPPING[fqan['type']]
+    else:
+        is_unique = False
+        legacy_suffix = ""
+        j = 0
+        while not is_unique:
+            if debug and j:
+                sys.stdout.write("Debug: Suffix '" + legacy_suffix +
+                                 "' not unique for FQAN " + fqan['expr'] +
+                                 " (attempt " + j + "\n")
+            legacy_suffix = to_base26(len(fqan['expr']) + j * 100)
+            legacy_suffix += to_base26(vo_id)
+            if legacy_suffix not in account_suffix:
+                is_unique = True
+            j += 1
+    return legacy_suffix
+
+
+def get_account_suffix(vo_name, fqan):
+    """Returns either a predefined suffix for pilot, production and software
+       manager roles, or a 3-character suffix corresponding to the base26-like
+       encoding of the FQAN hashcode
+    """
+    if fqan['type'] in FQAN_TYPE_MAPPING:
+        return FQAN_TYPE_MAPPING[fqan['type']]
+    else:
+        relative_fqan = fqan['expr'].replace('/' + vo_name, '', 1)
+        return to_base26(java_string_hashcode(relative_fqan))
+
+
+def get_dn_as_string(dn_list):
+    """Return a X509Name object as a string
+    """
+    dn_string = ""
+    if dn_list.__class__.__name__ != 'X509Name':
+        return None
+    for (field, value) in dn_list.get_components():
+        dn_string = dn_string + "/" + field + "=" + value
+    return dn_string
+
+
+def write_cert_info(voms_endpoint):
+    """Writes subject and issuer of VOMS server valid certificates as a
+       dict element
+    """
+    content = ""
+    subject = ""
+    issuer = ""
+    if voms_endpoint.cert:
+        cert = crypto.load_certificate(crypto.FILETYPE_PEM, voms_endpoint.cert)
+        subject = get_dn_as_string(cert.get_subject())
+        issuer = get_dn_as_string(cert.get_issuer())
+        content = format(
+            VOMS_ENDPOINT_CERT_TEMPLATE %
+            (voms_endpoint.hostname, subject, issuer)
+        )
+
+    return content
+
+
+def write_vo_template(vo_details, basedir, namespaces):
+    """Write VO template
+    """
+    vo_params_ns = os.path.join(namespaces['params_dir'], vo_details['name'])
+    vo_params_tpl = os.path.join(basedir, vo_params_ns + TPL_SUFFIX)
+    force_voms_admin = False
+
+    sys.stdout.write("Writing template for VO " + vo_details['name'] +
+                     " (" + vo_params_tpl + ")\n")
+    template = open(vo_params_tpl, 'w')
+    template.write("structure template " + vo_params_ns + ";\n\n")
+    template.write("'name' ?= '" + vo_details['name'] + "';\n")
+    vo_name = re.sub(re.compile('^vo\.'), '', vo_details['name'])
+    account_prefix = vo_name[0:3] + to_base26(vo_details['id'])
+    template.write("'account_prefix' ?= '" + account_prefix + "';\n\n")
+
+    # VOMS Servers
+    template.write("'voms_servers' ?= list(\n")
+    if not vo_details['voms_endpoints']:
+        sys.stderr.write("WARNING: VO " + vo_details['name'] +
+                         " has no VOMS endpoint defined\n")
+    elif len(vo_details['voms_endpoints']) == 1:
+        force_voms_admin = True
+    for endpoint in vo_details['voms_endpoints']:
+        template.write(
+            VOMS_ENDPOINT_TEMPLATE % (
+                endpoint.hostname, endpoint.hostname, endpoint.vomses_port,
+                endpoint.https_port
+            )
+        )
+        if not endpoint.is_admin:
+            if not force_voms_admin:
+                template.write("        'type', list('voms-only'),\n")
+            else:
+                sys.stdout.write("WARNING: voms-admin enabled on " +
+                                 "%s as this is the " % endpoint.hostname +
+                                 "only VOMS server (VO card " +
+                                 "inconsistency)\n")
+        template.write("    ),\n")
+    template.write(");\n\n")
+
+    # VOMS Mapping
+    template.write("'voms_mappings' ?= list(\n")
+    legacy_suffix = []
+    for mapping in vo_details['voms_mapping']:
+        suffix = get_legacy_suffix(vo_details['id'], mapping, legacy_suffix)
+        legacy_suffix.append(suffix)
+        suffix2 = get_account_suffix(vo_details['name'], mapping)
+        template.write(
+            VOMS_MAPPING_TEMPLATE %
+            (mapping['desc'], mapping['expr'], suffix, suffix2)
+        )
+
+    template.write(");\n\n")
+
+    # Base UID
+    base_uid = vo_details['id'] * 1000
+    template.write("'base_uid' ?= %i;\n" % base_uid)
+    template.close()
+
+
+def extract_old_cert(server_cert_tpl=None, debug=False):
+    """Extract the old certificate from the server certificate template
+    """
+    old_x509_cert = None
+    if os.path.isfile(server_cert_tpl):
+        if debug:
+            sys.stdout.write("DEBUG Retrieving old VOMS server certificate"
+                             " from file: %s\n" % server_cert_tpl)
+        template = open(server_cert_tpl, 'r')
+        old_cert = ""
+        in_cert_part = False
+        cert_start_reg = re.compile("^'cert' \?=")
+        cert_end_reg = re.compile("^EOF")
+        for line in template.readlines():
+            if in_cert_part:
+                if re.search(cert_end_reg, line):
+                    in_cert_part = False
+                    break
+                else:
+                    old_cert += line
+            elif re.search(cert_start_reg, line):
+                in_cert_part = True
+        template.close()
+        if old_cert:
+            try:
+                old_x509_cert = crypto.load_certificate(
+                    crypto.FILETYPE_PEM, old_cert
+                )
+            except crypto.Error as e:
+                sys.stderr.write("ERROR Existing certificate " +
+                                 "(%s) could not be " % server_cert_tpl +
+                                 "loaded: %s\n" % e)
+                old_x509_cert = None
+            if old_x509_cert is not None:
+                if old_x509_cert.has_expired():
+                    sys.stdout.write("Existing certificate" +
+                                     "(%s) is no " % server_cert_tpl +
+                                     "longer valid: ignoring it.\n")
+                    old_x509_cert = None
+    return old_x509_cert
+
+
+def update_voms_servers(vo_details, basedir, namespaces, debug=False):
+    """write template containing the voms certficate
+    """
+    voms_servers = {}
+    for vo_config in vo_details:
+        if not vo_config['voms_endpoints']:
+            sys.stderr.write("No VOMS server defined in any VO\n")
+        else:
+            for server in vo_config['voms_endpoints']:
+                if server.hostname not in voms_servers:
+                    voms_servers[server.hostname] = server.cert
+    for (hostname, cert) in voms_servers.items():
+        server_cert_ns = os.path.join(namespaces['cert_dir'], hostname)
+        server_cert_tpl = os.path.join(basedir, server_cert_ns + TPL_SUFFIX)
+        if cert is None:
+            sys.stdout.write("No certicate defined for %s " % hostname +
+                             "voms server.\n")
+            x509_cert = None
+        else:
+            try:
+                x509_cert = crypto.load_certificate(crypto.FILETYPE_PEM, cert)
+
+            except crypto.Error as e:
+                sys.stderr.write("ERROR Certificate for %s " % hostname +
+                                 "could not be loaded: %s\n" % e)
+        if x509_cert:
+            old_x509_cert = extract_old_cert(server_cert_tpl)
+            if (old_x509_cert and (old_x509_cert.digest('SHA256') ==
+                                   x509_cert.digest('SHA256'))):
+                sys.stdout.write(
+                    "Existing certificate (%s) is the " % server_cert_tpl +
+                    "same than the retrieved certificate: ignoring it.\n"
+                )
+                old_x509_cert = None
+        sys.stdout.write("Updating template for VOMS server " +
+                         "%s (%s)\n" % (hostname, server_cert_tpl))
+        template = open(server_cert_tpl, 'w')
+        template.write("structure template %s;\n\n" % server_cert_ns)
+        template.write("'cert' ?= <<EOF;\n")
+        if x509_cert:
+            template.write(crypto.dump_certificate(
+                crypto.FILETYPE_PEM, x509_cert
+            ))
+        else:
+            template.write("\n")
+        template.write("EOF\n\n")
+        if old_x509_cert:
+            sys.stdout.write("Existing certificate ('oldcert') found and " +
+                             "different from VO ID card: 'oldcert' defined\n")
+            template.write("'oldcert' ?= <<EOF;\n")
+            template.write(
+                crypto.dump_certificate(crypto.FILETYPE_PEM, old_x509_cert)
+            )
+            template.write("EOF\n\n")
+        template.close()
+
+
+def write_vo_list(vo_details, basedir, namespaces):
+    """Write template containing a list of all defined VOs
+    """
+    vo_list_ns = os.path.join(namespaces['params_dir'], 'allvos')
+    vo_list_template = os.path.join(basedir, vo_list_ns + TPL_SUFFIX)
+    sys.stdout.write("Writing the list of defined VOs (%s)\n" %
+                     vo_list_template)
+    template = open(vo_list_template, 'w')
+    template.write("unique template %s;\n\n" % vo_list_ns)
+    template.write("variable ALLVOS ?= list(\n")
+    for vo_config in sorted(vo_details, key=itemgetter('name')):
+        template.write("    '%s',\n" % vo_config['name'])
+    template.write(");\n\n")
+    template.close()
+
+
+def write_dn_list(vo_details, base_dir, namespaces):
+    """Write template containing subject / issuer of all valid VOMS server
+    certificates
+    """
+    dn_list_ns = os.path.join(namespaces['cert_dir'], "voms_dn_list")
+    dn_list_template = os.path.join(base_dir, dn_list_ns + TPL_SUFFIX)
+    voms_servers = {}
+    sys.stdout.write("Writing the list of defined VOMSs (" +
+                     dn_list_template + ")\n")
+    template = open(dn_list_template, 'w')
+    template.write("unique template " + dn_list_ns + ";\n\n")
+    template.write("variable VOMS_SERVER_DN ?= list(\n")
+    for vo_config in vo_details:
+        if not vo_config['voms_endpoints']:
+            sys.stderr.write("No VOMS server defined in any VO\n")
+        else:
+            for server in vo_config['voms_endpoints']:
+                if server.hostname not in voms_servers:
+                    voms_servers[server.hostname] = server
+    for hostname in sorted(voms_servers.keys()):
+        template.write(write_cert_info(voms_servers[hostname]))
+    template.write(");\n")
+    template.close()
+
+
+def parse_fqan_data(vo_name, fqan):
+    """Parse FQAN data and return a dict describing the fqan
+    """
+    data = {}
+    expr = get_clean_fqan(fqan.find('FqanExpr').text, vo_name)
+    if expr:
+        data['expr'] = expr.strip()
+        fqan_type = fqan.get('GroupType')
+        if fqan_type in FQAN_TYPE_MAPPING.keys():
+            data['type'] = fqan_type
+        else:
+            data['type'] = get_fqan_type(expr, vo_name)
+
+        if not data['type']:
+            desc = fqan.find('Description').text
+        else:
+            desc = data['type']
+        if desc:
+            data['desc'] = desc.strip()
+        else:
+            data['desc'] = ''
+
+    return data
+
+
+def parse_voms_server_data(vo_name, voms_server):
+    """ Parse VOMS servers and return a VOMSEndpoint object
+    """
+    voms_endpoint = VOMSEndpoint()
+    voms_endpoint.https_port = voms_server.get('HttpsPort')
+    voms_endpoint.vomses_port = voms_server.get('VomsesPort')
+    hostname = voms_server.find('hostname')
+    if hostname is not None:
+        hostname = hostname.text.strip()
+        if 'https:' in hostname[0:6]:
+            sys.stderr.write(
+                "The VOMS server defined for the %s " % vo_name +
+                "VO is not a regular VOMS server\n"
+            )
+            hostname = None
+    voms_endpoint.hostname = hostname
+    cert = voms_server.find('X509Cert/X509PublicKey')
+    if cert is not None:
+        cert = cert.text.strip()
+    voms_endpoint.cert = cert
+    voms_endpoint.set_is_admin(voms_server.get('IsVomsAdminServer'))
+
+    return voms_endpoint
+
+
+def parse_vo_card(vo_card):
+    """Parse a VO card and return the data
+    """
+    voconfig = {}
+    voconfig['name'] = vo_card.get("Name").lower()
+    if ID_ATTR == 'CIC_ID':
+        voconfig['id'] = int(vo_card.get(ID_ATTR))
+    else:
+        # This function permit to ensure that the base_uid start at 50000
+        # (permit the use of local user) and to grant up to 10000 accounts per
+        # VO.
+        voconfig['id'] = int(vo_card.get(ID_ATTR)) * 10 + 40
+    fqans = []
+    for fqan in vo_card.findall('gLiteConf/FQANs/FQAN'):
+        fqan_data = parse_fqan_data(voconfig['name'], fqan)
+        if fqan_data:
+            fqans.append(fqan_data)
+    voconfig['voms_mapping'] = fqans
+    voms_endpoints = []
+    for server in vo_card.findall('gLiteConf/VOMSServers/VOMS_Server'):
+        voms_endpoint = parse_voms_server_data(voconfig['name'], server)
+        if voms_endpoint.hostname is not None:
+            voms_endpoints.append(voms_endpoint)
+    voconfig['voms_endpoints'] = voms_endpoints
+
+    return voconfig
+
+
+def get_vo_card_data(vo_card_uri):
+    """Some documentation
+    """
+    vo_card_data = []
+    try:
+        xmlfile = urllib2.urlopen(vo_card_uri)
+        data = xmlfile.read()
+        xmlfile.close()
+    except Exception as err:
+        sys.stderr.write(
+            "ERROR could not retrieve the VOCard data from "
+            "the following url: %s (%s)\n" % (vo_card_uri, err))
+        return None
+    tree = ET.fromstring(data)
+    if tree.tag != ROOT_ELEM:
+        sys.stderr.write("ERROR retrieved VOCard data are not valid.\n")
+        return None
+    for vocard in tree.iter(ID_CARD_ELEM):
+        vo_card_data.append(parse_vo_card(vocard))
+    return vo_card_data
+
+
+def update_vo_config():
+    """Update VO related templates
+    """
+    parser = argparse.ArgumentParser(description=DESCRIPTION)
+    parser.add_argument("-v", "--version", action="version", version=VERSION,
+                        help="show program\'s version number and exit")
+    parser.add_argument("-b", "--basedir", type=str,
+                        help="base directory containing the VO-related files",
+                        required=True)
+    args = parser.parse_args()
+    basedir = args.basedir
+    vo_card_data = get_vo_card_data(VO_CARD_URI)
+    if not vo_card_data:
+        sys.stderr.write("ERROR Could not retrieve VO Card data. The vo" +
+                         " configurtion templates will not be updated.\n")
+        sys.exit(1)
+    namespaces = {
+        'cert_dir': CERT_DIR,
+        'params_dir': PARAMS_DIR,
+        'site_params_dir': SITE_PARAMS_DIR
+    }
+
+    # Create the directory tree if necessary
+    for dir_path in namespaces.values():
+        dirname = os.path.join(basedir, dir_path)
+        if not os.path.isdir(dirname):
+            os.makedirs(dirname)
+    for vo_data in vo_card_data:
+        write_vo_template(vo_data, basedir, namespaces)
+    write_dn_list(vo_card_data, basedir, namespaces)
+    write_vo_list(vo_card_data, basedir, namespaces)
+    update_voms_servers(vo_card_data, basedir, namespaces)
+
+
+if __name__ == '__main__':
+    update_vo_config()
