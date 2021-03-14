@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 # Copyright 2018 CNRS and University of Strasbourg
@@ -20,7 +20,14 @@ from operator import itemgetter
 import os
 import re
 import sys
-import urllib.request
+try:
+    import urllib.request
+except ImportError:
+    sys.stderr.write(
+        "ERROR: Could not load the urllib.request module. This tool " +
+        "requires Python 3.\n"
+    )
+    sys.exit(1)
 import xml.etree.ElementTree as ET
 from OpenSSL import crypto
 

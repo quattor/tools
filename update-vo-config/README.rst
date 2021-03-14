@@ -49,7 +49,7 @@ To run the tool, execute:
 
 .. code-block:: console
 
-   $ update-vo-config -b cfg/sites/example -t d0372805abb4
+   $ python3 update-vo-config -b cfg/sites/example -t d0372805abb4
 
 **Note:** Since March 2021, the new API of the Operaions Portal required
 to use a token for accessing the VO-related data. You need first to
