@@ -19,7 +19,7 @@ from setuptools import setup
 
 __author__ = 'Jerome Pansanel'
 __email__ = 'jerome.pansanel@iphc.cnrs.fr'
-__version__ = '0.3'
+__version__ = '1.0'
 
 setup(
     name='update-vo-config',
@@ -29,19 +29,21 @@ setup(
         The update-vo-config tool permits to retrieve VO details from the
         Operations Portal and to create the corresponding PAN templates.
     ''',
-    classifers=[
+    classifiers=[
         'Development Status :: 5 - Production/Stable',
         'Environment :: Console',
         'Environment :: Other Environment',
-        'Programming Language :: Python',
+        'Programming Language :: Python :: 3',
         ],
     keywords='',
     author=__author__,
     author_email=__email__,
     url='http://github.com/quattor/tools/update-vo-config',
     license='Apache License, Version 2.0',
+    python_requires='>=3',
     install_requires=[
         'setuptools',
+        'openssl',
         ],
     scripts=['update-vo-config'],
 )
