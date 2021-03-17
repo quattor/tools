@@ -24,6 +24,13 @@ The installation is as simple as:
 
    $ python3 setup.py install
 
+In case you are using conda, just configure it:
+
+.. code-block:: console
+
+   $ conda create -n quattor urllib3 openssl
+   $ conda activate quattor
+
 
 Usage
 =====
