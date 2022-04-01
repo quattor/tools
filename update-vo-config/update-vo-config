@@ -369,7 +369,7 @@ def update_voms_servers(vo_details, basedir, namespaces, debug=False):
         server_cert_ns = os.path.join(namespaces['cert_dir'], hostname)
         server_cert_tpl = os.path.join(basedir, server_cert_ns + TPL_SUFFIX)
         x509_cert = None
-        old_X509_cert = None
+        old_x509_cert = None
         if cert is None:
             sys.stdout.write("No certicate defined for %s " % hostname +
                              "voms server.\n")
