@@ -39,7 +39,8 @@ SW_MANAGER_ROLES = [
     '/Role=sgm',
     '/Role=SoftwareManager',
     '/Role=VO-Software-Manager',
-    '/Role=SW-Admin'
+    '/Role=SW-Admin',
+    '/Role=SW-Manager'
 ]
 
 PRODUCTION_ROLES = [
