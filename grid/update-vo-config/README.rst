@@ -58,7 +58,7 @@ To run the tool, execute:
 
    $ python3 update-vo-config -b cfg/sites/example -t d0372805abb4
 
-**Note:** Since March 2021, the new API of the Operaions Portal required
+**Note:** Since March 2021, the new API of the Operations Portal required
 to use a token for accessing the VO-related data. You need first to
 authentified against the `Operations Portal API page <https://operations-portal.egi.eu/api-documentation>`_
 and ask for a token that can be use with this software.
